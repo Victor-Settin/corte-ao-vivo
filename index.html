@@ -840,8 +840,8 @@ button{cursor:pointer}
 
 <button class="card iconbtn storebtn" id="storeBtn" aria-label="Mostrar lojas abertas" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M4 9h16l-1.5-5h-13L4 9Z"/><path d="M5 9v11h14V9"/><path d="M10 20v-5h4v5"/></svg></button>
 
-<div class="card shift" id="shiftBar" hidden>
-  <span>Turno</span><b class="num" id="sEarn">$0</b><b class="num" id="sHrs">0:00</b><b class="num ok" id="sRate">—</b>
+<div class="card shift" id="shiftBar">
+  <span id="sLabel">Parado</span><b class="num" id="sEarn">$0</b><b class="num" id="sHrs">0:00</b><b class="num ok" id="sRate">—</b>
 </div>
 
 <div class="dock">
@@ -1033,9 +1033,9 @@ function render(){
  car.scrollLeft=sx;
  renderShift();
 }
-function renderShift(){const sh=S.shift;$("shiftBar").hidden=!sh;$("bShift").textContent=sh?"Encerrar":"Iniciar turno";
+function renderShift(){const sh=S.shift;$("sLabel").textContent=sh?"Turno":"Parado";$("sLabel").className=sh?"ok":"";$("bShift").textContent=sh?"Encerrar":"Iniciar turno";
  $("bDone").disabled=!S.batches.some(b=>sh&&b.shift===sh.id&&!b.done);
- if(!sh)return;const list=S.batches.filter(b=>b.shift===sh.id);const earn=list.reduce((s,b)=>s+(b.paid??b.total),0);const mins=(Date.now()-sh.start)/60000;
+ if(!sh){$("sEarn").textContent="$0.00";$("sHrs").textContent="0:00:00";$("sRate").textContent="$0/h";return}const list=S.batches.filter(b=>b.shift===sh.id);const earn=list.reduce((s,b)=>s+(b.paid??b.total),0);const mins=(Date.now()-sh.start)/60000;
  const sec=Math.floor((Date.now()-sh.start)/1000),p2=n=>String(n).padStart(2,"0");
  $("sEarn").textContent="$"+earn.toFixed(2);$("sHrs").textContent=`${Math.floor(sec/3600)}:${p2(Math.floor(sec/60)%60)}:${p2(sec%60)}`;
  // live $/h from the orders you logged; shown after the first minute so it doesn't spike
@@ -1165,6 +1165,9 @@ $("wipeYes").onclick=()=>{const cfg=S.cfg;S=structuredClone(DEF);S.cfg=cfg;save(
 
 async function wake(){try{await navigator.wakeLock?.request("screen")}catch(e){}}
 document.addEventListener("visibilitychange",()=>{if(!document.hidden){wake();render()}});
+const APP_VERSION="2026-10-06.5";
+(async()=>{try{const r=await fetch("./?t="+Date.now(),{cache:"no-store"});const t=await r.text();const m=t.match(/APP_VERSION="([^"]+)"/);
+ if(m&&m[1]!==APP_VERSION&&sessionStorage.getItem("reloadedFor")!==m[1]){sessionStorage.setItem("reloadedFor",m[1]);location.replace("./?v="+encodeURIComponent(m[1]))}}catch(e){}})();
 save();wake();startGPS();render();setInterval(render,30000);setInterval(renderShift,1000);
 </script>
 
