@@ -911,7 +911,7 @@ const dark=()=>{const t=document.documentElement.dataset.theme;return t?t==="dar
 const map=L.map("map",{zoomControl:false,attributionControl:true}).fitBounds([[37.66,-122.51],[37.81,-122.38]],{paddingTopLeft:[10,90],paddingBottomRight:[10,260]});
 let tiles=null;
 function setTiles(){if(tiles)map.removeLayer(tiles);
- tiles=L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/${dark()?"World_Dark_Gray_Base":"World_Light_Gray_Base"}/MapServer/tile/{z}/{y}/{x}`,{maxZoom:16,attribution:'Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap'}).addTo(map)}
+ tiles=L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/${dark()?"World_Dark_Gray_Base":"World_Light_Gray_Base"}/MapServer/tile/{z}/{y}/{x}`,{maxZoom:16,attribution:'Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap'}).addTo(map);tiles.once("tileload",()=>{tilesOk=true;if(typeof shapeLayer!=="undefined")map.removeLayer(shapeLayer)})}
 setTiles();matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{setTiles();setTimeout(()=>{drawBase();drawAreas();render()},50)});
 new MutationObserver(setTiles).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
 
@@ -920,12 +920,12 @@ const COAST=[[37.630,-122.497],[37.670,-122.497],[37.700,-122.503],[37.735,-122.
 const ROADS={"280":[[37.640,-122.468],[37.690,-122.468],[37.708,-122.460],[37.725,-122.445],[37.735,-122.430],[37.745,-122.405],[37.765,-122.398],[37.776,-122.397]],
  "101":[[37.640,-122.405],[37.660,-122.405],[37.700,-122.398],[37.730,-122.400],[37.750,-122.405],[37.766,-122.408],[37.772,-122.420],[37.790,-122.423],[37.800,-122.440],[37.803,-122.460],[37.810,-122.475]],
  "19th Ave":[[37.700,-122.474],[37.720,-122.475],[37.765,-122.476],[37.789,-122.475]]};
-const baseLayer=L.layerGroup().addTo(map);
-function drawBase(){baseLayer.clearLayers();
- L.polygon(COAST,{stroke:false,fillColor:css("--land"),fillOpacity:1,interactive:false}).addTo(baseLayer);
- L.rectangle([[37.7652,-122.5105],[37.7715,-122.4540]],{stroke:false,fillColor:css("--park"),fillOpacity:1,interactive:false}).addTo(baseLayer);
- L.circle([37.7235,-122.4935],{radius:700,stroke:false,fillColor:css("--water"),fillOpacity:1,interactive:false}).addTo(baseLayer);
- Object.values(ROADS).forEach(r=>L.polyline(r,{color:css("--road"),weight:3,opacity:.9,interactive:false}).addTo(baseLayer));
+const baseLayer=L.layerGroup().addTo(map),shapeLayer=L.layerGroup();let tilesOk=false;
+function drawBase(){baseLayer.clearLayers();shapeLayer.clearLayers();if(!tilesOk)shapeLayer.addTo(map);
+ L.polygon(COAST,{stroke:false,fillColor:css("--land"),fillOpacity:1,interactive:false}).addTo(shapeLayer);
+ L.rectangle([[37.7652,-122.5105],[37.7715,-122.4540]],{stroke:false,fillColor:css("--park"),fillOpacity:1,interactive:false}).addTo(shapeLayer);
+ L.circle([37.7235,-122.4935],{radius:700,stroke:false,fillColor:css("--water"),fillOpacity:1,interactive:false}).addTo(shapeLayer);
+ Object.values(ROADS).forEach(r=>L.polyline(r,{color:css("--road"),weight:3,opacity:.9,interactive:false}).addTo(shapeLayer));
  ZONES.forEach(z=>L.marker([z.lat-0.0045,z.lng],{icon:L.divIcon({className:"",html:`<div class="zl">${z.n.split(" /")[0]}</div>`,iconSize:[0,0]}),interactive:false}).addTo(baseLayer))}
 drawBase();
 const areaLayer=L.layerGroup().addTo(map),pinLayer=L.layerGroup().addTo(map);
