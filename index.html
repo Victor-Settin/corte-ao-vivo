@@ -727,6 +727,32 @@ button{cursor:pointer}
 .layers button span{font-size:12px;color:var(--mute)}
 .layers button[aria-checked="true"]{background:var(--go-soft)}
 .layers button[aria-checked="true"] b{color:var(--go)}
+.storebtn{position:fixed;right:12px;top:calc(env(safe-area-inset-top,0px) + 128px);height:46px;z-index:500}
+.storebtn[aria-pressed="true"]{border-color:var(--go)}
+.storebtn[aria-pressed="true"] svg{stroke:var(--go)}
+.store{transform:translate(-50%,-50%);width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:11px;font-weight:700;font-family:var(--display);background:var(--panel);border:1.5px solid var(--mute);color:var(--mute);box-shadow:var(--shadow)}
+.store.open{border-color:var(--go);color:var(--go)}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--panel);color:var(--ink);box-shadow:var(--shadow)}
+.leaflet-popup-content{margin:10px 12px;font:13px/1.4 var(--body)}
+.leaflet-popup-content b{font-size:14px}
+.leaflet-container a.leaflet-popup-close-button{color:var(--mute)}
+.verdict{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;border-radius:14px;background:var(--panel2)}
+.verdict.go{background:var(--go-soft)}
+.verdict.no{background:color-mix(in srgb,var(--stop) 14%,var(--panel))}
+.verdict .big{font-family:var(--display);font-weight:700;font-size:28px}
+.verdict.go .big{color:var(--go)} .verdict.no .big{color:var(--stop)}
+.verdict .lab{font-weight:600}
+.verdict small{display:block;color:var(--mute);font-size:12px}
+.timeline{display:grid;gap:0;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.tl{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.tl:last-child{border-bottom:0}
+.tl .k{font-weight:600}
+.tl .v{font-family:var(--display);font-weight:700;font-size:17px;text-align:right}
+.tl .d{grid-column:1/-1;font-size:12px;color:var(--mute)}
+.tl.total{background:var(--panel2)}
+.stepper{display:flex;align-items:center;gap:8px}
+.stepper button{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);font-size:20px;font-weight:600}
+.stepper input{text-align:center}
 .shift{position:fixed;top:calc(env(safe-area-inset-top,0px) + 74px);left:12px;display:flex;gap:12px;padding:6px 12px;font-size:13px;z-index:500;border-radius:999px}
 .shift b{font-weight:600}
 .shift span{color:var(--mute)}
@@ -812,6 +838,8 @@ button{cursor:pointer}
 <button class="card iconbtn layerbtn" id="layerBtn" aria-label="Camadas do mapa" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="m3 13 9 5 9-5"/></svg></button>
 <div class="card layers" id="layerPop" hidden role="menu" aria-label="Camadas"></div>
 
+<button class="card iconbtn storebtn" id="storeBtn" aria-label="Mostrar lojas abertas" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M4 9h16l-1.5-5h-13L4 9Z"/><path d="M5 9v11h14V9"/><path d="M10 20v-5h4v5"/></svg></button>
+
 <div class="card shift" id="shiftBar" hidden>
   <span>Turno</span><b class="num" id="sEarn">$0</b><b class="num" id="sHrs">0:00</b><b class="num ok" id="sRate">—</b>
 </div>
@@ -839,6 +867,19 @@ button{cursor:pointer}
   <div class="field"><span>Tamanho</span><div class="chips" id="aSize"></div></div>
   <div class="field"><span>Entrega em</span><div class="chips" id="aDest"></div></div>
   <div class="row"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="aSave">Salvar</button></div>
+</div>
+
+<div class="sheet" id="simSheet" hidden role="dialog" aria-labelledby="simH">
+  <h2 id="simH">Se eu aceitar</h2>
+  <p class="note" id="simWhere"></p>
+  <div class="row">
+    <label class="field" for="sValue"><span>Total da oferta ($)</span><input id="sValue" type="number" inputmode="decimal" step="0.5" placeholder="0"></label>
+    <div class="field"><span>Itens</span><div class="stepper"><button type="button" id="sMinus" aria-label="Menos itens">−</button><input id="sItems" type="number" inputmode="numeric" min="1" aria-label="Itens"><button type="button" id="sPlus" aria-label="Mais itens">+</button></div></div>
+  </div>
+  <div class="verdict" id="sVerdict"></div>
+  <div class="timeline" id="sTimeline"></div>
+  <p class="note" id="sStores"></p>
+  <div class="row"><button class="btn" data-close>Fechar</button><button class="btn primary" id="sAccept">Aceitei esta</button></div>
 </div>
 
 <div class="sheet" id="menuSheet" hidden role="dialog" aria-labelledby="menuH">
@@ -901,9 +942,14 @@ const traffic=()=>isPeak()?1.3:1;
 function estMin(a,b){const m=roadMi(a,b);const mph=m<3?14:m<6?20:m<12?28:m<18?36:45;return m/mph*60*traffic()+3}
 function nearest(p){let best=ZONES[0],bd=1e9;for(const z of ZONES){const d=crow(p,z);if(d<bd){bd=d;best=z}}return {z:best,d:bd}}
 const bucket=t=>{const h=new Date(t).getHours();return h<11?0:h<16?1:2};
+// typical demand by hour: <1 = offers come faster than the zone's base wait
+function hourFactor(d=new Date()){const h=d.getHours(),we=d.getDay()===0||d.getDay()===6;
+ if(h<6)return 3;if(h>=22)return 1.8;
+ if(we){if(h<8)return 1.4;if(h<12)return .7;if(h<16)return .85;if(h<19)return .9;return 1.1}
+ if(h<9)return 1.3;if(h<11)return 1;if(h<14)return .9;if(h<16)return 1.1;if(h<19)return .8;return 1.1}
 function waitFor(id){let xs=S.waits.filter(w=>w.z===id&&w.b===bucket(Date.now())).map(w=>w.m);
  if(xs.length<3)xs=S.waits.filter(w=>w.z===id).map(w=>w.m);
- if(xs.length<3)return {m:ZONES.find(z=>z.id===id).w,learned:false};
+ if(xs.length<3)return {m:ZONES.find(z=>z.id===id).w*hourFactor(),learned:false};
  xs.sort((a,b)=>a-b);return {m:xs[xs.length>>1],learned:true}}
 function tipFactor(id){const xs=S.batches.filter(b=>b.dest===id&&b.paid!=null&&b.total>0);if(xs.length<3)return 1;
  const r=xs.reduce((s,b)=>s+b.paid/b.total,0)/xs.length;return r<0.97?1/r:1}
@@ -973,7 +1019,7 @@ function render(){
  pinLayer.clearLayers();
  rows.forEach(r=>{const cls=["pin",r.z.id===sel?"sel":"",r===best?"best":""].join(" ");
   const m=L.marker([r.z.lat,r.z.lng],{icon:L.divIcon({className:"",html:`<div class="${cls}"><span class="tag">${money(r.c[size].need)}<small>${r.c[size].min}m</small></span><span class="stem"></span></div>`,iconSize:[0,0]}),keyboard:true,title:r.z.n});
-  m.on("click",()=>select(r.z.id,true));m.addTo(pinLayer)});
+  m.on("click",()=>{if(sel===r.z.id)openSim(r.z.id);else select(r.z.id,true)});m.addTo(pinLayer)});
  // me
  const o=origin();if(!meMarker)meMarker=L.marker([o.lat,o.lng],{icon:L.divIcon({className:"",html:'<div class="me"></div>',iconSize:[16,16],iconAnchor:[8,8]}),interactive:false,zIndexOffset:1000}).addTo(map);else meMarker.setLatLng([o.lat,o.lng]);
  // carousel
@@ -982,7 +1028,7 @@ function render(){
   return `<button class="zc" data-z="${r.z.id}" aria-current="${r.z.id===sel}">
    <span class="h"><span class="n">${r.z.n}</span><span class="eta num">${Math.round(leg.min)} min · ${leg.mi.toFixed(1)} mi${leg.real?"":" ≈"}</span></span>
    <span class="cuts">${SIZES.map(s=>`<span class="cut ${s.id===size?"on":""}"><span class="k">${s.n}</span><span class="v num">${money(c[s.id].need)}</span><span class="t num">${c[s.id].min} min</span></span>`).join("")}</span>
-   <span class="f"><span>Depois: ${bk.z.id===r.z.id?"espere lá mesmo":"espere em "+bk.z.n.split(" /")[0]} (~${Math.round(waitFor(bk.z.id).m)} min)</span>${c.S.tf>1?'<span class="tipw">gorjeta costuma cair</span>':""}</span>
+   ${r.z.id===sel?'<span class="f"><b class="ok">Toque de novo para simular a oferta →</b></span>':""}<span class="f"><span>Depois: ${bk.z.id===r.z.id?"espere lá mesmo":"espere em "+bk.z.n.split(" /")[0]} (~${Math.round(waitFor(bk.z.id).m)} min)</span>${c.S.tf>1?'<span class="tipw">gorjeta costuma cair</span>':""}</span>
   </button>`}).join("");
  car.scrollLeft=sx;
  renderShift();
@@ -990,8 +1036,10 @@ function render(){
 function renderShift(){const sh=S.shift;$("shiftBar").hidden=!sh;$("bShift").textContent=sh?"Encerrar":"Iniciar turno";
  $("bDone").disabled=!S.batches.some(b=>sh&&b.shift===sh.id&&!b.done);
  if(!sh)return;const list=S.batches.filter(b=>b.shift===sh.id);const earn=list.reduce((s,b)=>s+(b.paid??b.total),0);const mins=(Date.now()-sh.start)/60000;
- $("sEarn").textContent=money(earn);$("sHrs").textContent=`${Math.floor(mins/60)}:${String(Math.floor(mins%60)).padStart(2,"0")}`;
- $("sRate").textContent=mins>15?money(earn/(mins/60))+"/h":"—"}
+ const sec=Math.floor((Date.now()-sh.start)/1000),p2=n=>String(n).padStart(2,"0");
+ $("sEarn").textContent="$"+earn.toFixed(2);$("sHrs").textContent=`${Math.floor(sec/3600)}:${p2(Math.floor(sec/60)%60)}:${p2(sec%60)}`;
+ // live $/h from the orders you logged; shown after the first minute so it doesn't spike
+ $("sRate").textContent=mins>=1&&earn>0?"$"+(earn/(mins/60)).toFixed(2)+"/h":"$0/h"}
 
 // ---------- Selection + route ----------
 async function select(id,fromMap){sel=id;const z=ZONES.find(z=>z.id===id);render();
@@ -1006,7 +1054,7 @@ async function select(id,fromMap){sel=id;const z=ZONES.find(z=>z.id===id);render
   if(routeLine)map.removeLayer(routeLine);
   routeLine=L.geoJSON(rt.geometry,{style:{color:css("--route"),weight:5,opacity:.9}}).addTo(map);render()}
  catch(e){/* offline or blocked: keep the straight-line estimate */}}
-$("carousel").addEventListener("click",e=>{const c=e.target.closest(".zc");if(c)select(c.dataset.z,false)});
+$("carousel").addEventListener("click",e=>{const c=e.target.closest(".zc");if(!c)return;if(sel===c.dataset.z)openSim(c.dataset.z);else select(c.dataset.z,false)});
 document.querySelector(".seg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;size=b.dataset.size;
  document.querySelectorAll(".seg button").forEach(x=>x.setAttribute("aria-pressed",x===b));render()});
 
@@ -1016,17 +1064,71 @@ $("layerBtn").onclick=()=>{const open=$("layerPop").hidden;renderLayers();$("lay
 $("layerPop").addEventListener("click",e=>{const b=e.target.closest("[data-layer]");if(!b)return;S.cfg.layer=b.dataset.layer;save();setTiles();$("layerPop").hidden=true;$("layerBtn").setAttribute("aria-expanded",false)});
 map.on("click",()=>{$("layerPop").hidden=true});
 
+// ---------- Stores open now (OpenStreetMap) ----------
+const CHAINS=/safeway|costco|sprouts|smart ?& ?final|cvs|walgreens|lucky|grocery outlet|foods co|mollie stone|andronico|nob hill|raley|save mart|99 ranch|food 4 less|petco|staples/i;
+let stores=[],storeLayer=L.layerGroup(),storesOn=false,storesAt=null;
+const DAYS=["Su","Mo","Tu","We","Th","Fr","Sa"];
+function hm(t){const [h,m]=t.split(":").map(Number);return h*60+m}
+function dayIn(spec,di){return spec.split(",").some(part=>{const [a,b]=part.trim().split("-");const ia=DAYS.indexOf(a),ib=b?DAYS.indexOf(b):ia;if(ia<0)return false;return ia<=ib?di>=ia&&di<=ib:di>=ia||di<=ib})}
+// handles the common OSM forms: "24/7", "Mo-Su 06:00-24:00", "Mo-Fr 07:00-22:00; Sa,Su 08:00-21:00"
+function openState(oh,d=new Date()){if(!oh)return null;oh=oh.trim();if(oh==="24/7")return {open:true,txt:"Aberto 24h"};
+ const di=d.getDay(),now=d.getHours()*60+d.getMinutes();let rule=null;
+ for(const r of oh.split(";")){const m=r.trim().match(/^([A-Za-z,\- ]+)?\s*(\d{1,2}:\d{2})-(\d{1,2}:\d{2})/);if(!m)continue;if(!m[1]||dayIn(m[1].replace(/\s/g,""),di))rule=m}
+ if(!rule)return null;const a=hm(rule[2]),b=hm(rule[3]);const open=b>a?now>=a&&now<b:now>=a||now<b;
+ return {open,txt:open?`Aberto · fecha ${rule[3]==="24:00"?"meia-noite":rule[3]}`:`Fechado · abre ${rule[2]}`}}
+async function loadStores(){const o=origin();if(storesAt&&crow(storesAt,o)<1.5)return;storesAt={lat:o.lat,lng:o.lng};
+ const q=`[out:json][timeout:20];nwr["shop"~"supermarket|convenience|chemist|wholesale|pet|department_store"]["name"](around:7000,${o.lat},${o.lng});out center tags;`;
+ try{const r=await fetch("https://overpass-api.de/api/interpreter",{method:"POST",body:"data="+encodeURIComponent(q),headers:{"Content-Type":"application/x-www-form-urlencoded"}});
+  const j=await r.json();stores=j.elements.map(e=>({name:e.tags.brand||e.tags.name,lat:e.lat??e.center?.lat,lng:e.lon??e.center?.lon,oh:e.tags.opening_hours,addr:[e.tags["addr:housenumber"],e.tags["addr:street"]].filter(Boolean).join(" ")})).filter(x=>x.lat&&CHAINS.test(x.name));
+  drawStores();render()}catch(e){storesAt=null;toast("Não deu para carregar as lojas agora")}}
+function drawStores(){storeLayer.clearLayers();stores.forEach(st=>{const os=openState(st.oh);
+ L.marker([st.lat,st.lng],{icon:L.divIcon({className:"",html:`<div class="store ${os?.open?"open":""}">${st.name.slice(0,2).toUpperCase()}</div>`,iconSize:[0,0]}),zIndexOffset:-100})
+  .bindPopup(`<b>${st.name}</b><br>${st.addr||""}<br>${os?os.txt:"Horário não informado"}<br><span style="color:var(--mute)">${Math.round(estMin(origin(),st))} min daqui</span>`).addTo(storeLayer)})}
+function nearbyOpen(n=3){const o=origin();return stores.map(st=>({st,os:openState(st.oh),d:crow(o,st)})).filter(x=>x.os?.open).sort((a,b)=>a.d-b.d).slice(0,n)}
+$("storeBtn").onclick=()=>{storesOn=!storesOn;$("storeBtn").setAttribute("aria-pressed",storesOn);if(storesOn){storeLayer.addTo(map);loadStores()}else map.removeLayer(storeLayer)};
+
+// ---------- "Se eu aceitar" simulator ----------
+const sim={items:15,value:null,z:null};
+const hhmm=d=>d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+function openSim(id){sim.z=ZONES.find(z=>z.id===id);sim.items=SIZES.find(s=>s.id===size).items;sim.value=null;
+ $("sItems").value=sim.items;$("sValue").value="";renderSim();openSheet("simSheet");setTimeout(()=>$("sValue").focus(),60)}
+function renderSim(){const z=sim.z;if(!z)return;
+ const shop=sim.items*S.cfg.secItem/60+S.cfg.checkout,leg=legTo(z),back=bestReturn(z),tf=tipFactor(z.id);
+ const total=shop+leg.min+4+back.t,work=shop+leg.min+4,mi=leg.mi+back.mi,cost=mi*S.cfg.mile;
+ const need=Math.ceil((S.cfg.target*total/60+cost)*tf);
+ $("simWhere").textContent=`De ${here.n} para ${z.n}${isPeak()?" · horário de pico":""}`;
+ const v=sim.value;let html;
+ if(v>0){const net=v/tf-cost,rate=net/(total/60),ok=rate>=S.cfg.target;
+  html=`<div><span class="lab">${ok?"Vale aceitar":"Abaixo da sua meta"}</span><small>líquido ~$${net.toFixed(0)} · mínimo p/ meta $${need}</small></div><span class="big num">$${rate.toFixed(0)}/h</span>`;
+  $("sVerdict").className="verdict "+(ok?"go":"no")}
+ else{html=`<div><span class="lab">Mínimo para $${S.cfg.target}/h</span><small>digite o total da oferta para ver o $/hora</small></div><span class="big num">$${need}</span>`;$("sVerdict").className="verdict"}
+ $("sVerdict").innerHTML=html;
+ const now=new Date(),done=new Date(now.getTime()+work*60000),ready=new Date(now.getTime()+total*60000);
+ $("sTimeline").innerHTML=[
+  ["Compra",`${Math.round(shop)} min`,`${sim.items} itens × ${S.cfg.secItem}s + ${S.cfg.checkout} min de checkout`],
+  ["Até a entrega",`${Math.round(leg.min)} min`,`${leg.mi.toFixed(1)} mi${leg.real?" pela rota real":" estimadas"}${isPeak()?" · com trânsito de pico":""}`],
+  ["Entrega",`4 min`,`estacionar e entregar · termina ~${hhmm(done)}`],
+  ["Próxima oferta",`${Math.round(back.t)} min`,`${back.z.id===z.id?"espere em "+z.n:"vá para "+back.z.n+" ("+back.mi.toFixed(1)+" mi)"} · espera ~${Math.round(waitFor(back.z.id).m)} min ${waitFor(back.z.id).learned?"(seu histórico)":"(estimada p/ este horário)"}`],
+  ["Total do ciclo",`${Math.round(total)} min`,`pronto para outro batch ~${hhmm(ready)} · ${mi.toFixed(1)} mi · custo ~$${cost.toFixed(0)}`]
+ ].map((r,i)=>`<div class="tl ${i===4?"total":""}"><span class="k">${r[0]}</span><span class="v num">${r[1]}</span><span class="d">${r[2]}</span></div>`).join("");
+ const near=nearbyOpen();$("sStores").textContent=near.length?"Lojas abertas perto de você: "+near.map(x=>`${x.st.name} (${x.os.txt.replace("Aberto · ","")})`).join(" · "):(storesOn?"":"Toque no ícone de loja no mapa para ver as lojas abertas perto de você.")}
+$("sValue").oninput=e=>{sim.value=parseFloat(e.target.value)||null;renderSim()};
+$("sItems").oninput=e=>{const v=parseInt(e.target.value);if(v>0){sim.items=v;renderSim()}};
+$("sMinus").onclick=()=>{sim.items=Math.max(1,sim.items-5);$("sItems").value=sim.items;renderSim()};
+$("sPlus").onclick=()=>{sim.items+=5;$("sItems").value=sim.items;renderSim()};
+$("sAccept").onclick=()=>{const it=sim.items;pick={size:it<=20?"S":it<=40?"M":"L",dest:sim.z.id};closeSheets();$("bAccept").click();pick.size=it<=20?"S":it<=40?"M":"L";pick.dest=sim.z.id;chips();if(sim.value)$("aTotal").value=sim.value};
+
 // ---------- GPS ----------
 function startGPS(){
  if(S.cfg.manual||!navigator.geolocation){gps="manual";render();return}
  try{navigator.geolocation.watchPosition(p=>{const pt={lat:p.coords.latitude,lng:p.coords.longitude};const n=nearest(pt);
    if(n.d>8){gps="far";fix=null}else{gps="live";const moved=!fix||crow(fix,pt)>0.15;
-    if(moved){fix={...pt,key:pt.lat.toFixed(3)+","+pt.lng.toFixed(3)}}here=n.z}
+    if(moved){fix={...pt,key:pt.lat.toFixed(3)+","+pt.lng.toFixed(3)};if(storesOn)loadStores()}here=n.z}
    render()},()=>{gps="denied";render()},{enableHighAccuracy:true,maximumAge:15000,timeout:20000})}catch(e){gps="denied";render()}}
 
 // ---------- Sheets ----------
 function openSheet(id){$("scrim").hidden=false;$(id).hidden=false}
-function closeSheets(){$("scrim").hidden=true;["acceptSheet","menuSheet"].forEach(i=>$(i).hidden=true);$("wipeConfirm").hidden=true}
+function closeSheets(){$("scrim").hidden=true;["acceptSheet","menuSheet","simSheet"].forEach(i=>$(i).hidden=true);$("wipeConfirm").hidden=true}
 $("scrim").onclick=closeSheets;document.querySelectorAll("[data-close]").forEach(b=>b.onclick=closeSheets);
 function toast(t){const d=document.createElement("div");d.className="toast";d.textContent=t;document.body.append(d);setTimeout(()=>d.remove(),1800)}
 
@@ -1063,7 +1165,7 @@ $("wipeYes").onclick=()=>{const cfg=S.cfg;S=structuredClone(DEF);S.cfg=cfg;save(
 
 async function wake(){try{await navigator.wakeLock?.request("screen")}catch(e){}}
 document.addEventListener("visibilitychange",()=>{if(!document.hidden){wake();render()}});
-save();wake();startGPS();render();setInterval(render,30000);
+save();wake();startGPS();render();setInterval(render,30000);setInterval(renderShift,1000);
 </script>
 
 </body>
