@@ -906,11 +906,12 @@ function origin(){return fix?{lat:fix.lat,lng:fix.lng,key:fix.key}:{lat:here.lat
 
 // ---------- Map ----------
 const $=id=>document.getElementById(id);
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const dark=()=>{const t=document.documentElement.dataset.theme;return t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches};
 const map=L.map("map",{zoomControl:false,attributionControl:true}).fitBounds([[37.66,-122.51],[37.81,-122.38]],{paddingTopLeft:[10,90],paddingBottomRight:[10,260]});
 let tiles=null;
 function setTiles(){if(tiles)map.removeLayer(tiles);
- tiles=L.tileLayer(`https://{s}.basemaps.cartocdn.com/${dark()?"dark_all":"light_all"}/{z}/{x}/{y}{r}.png`,{subdomains:"abcd",maxZoom:19,attribution:'© OpenStreetMap · © CARTO'}).addTo(map)}
+ tiles=L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/${dark()?"World_Dark_Gray_Base":"World_Light_Gray_Base"}/MapServer/tile/{z}/{y}/{x}`,{maxZoom:16,attribution:'Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap'}).addTo(map)}
 setTiles();matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{setTiles();setTimeout(()=>{drawBase();drawAreas();render()},50)});
 new MutationObserver(setTiles).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
 
@@ -929,7 +930,6 @@ function drawBase(){baseLayer.clearLayers();
 drawBase();
 const areaLayer=L.layerGroup().addTo(map),pinLayer=L.layerGroup().addTo(map);
 let routeLine=null,meMarker=null;
-const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 function drawAreas(){areaLayer.clearLayers();ZONES.forEach(z=>L.circle([z.lat,z.lng],{radius:1100,color:css("--mute"),weight:1,opacity:.35,fillColor:css("--mute"),fillOpacity:.06,interactive:false}).addTo(areaLayer))}
 drawAreas();
 const money=v=>"$"+Math.round(v);
