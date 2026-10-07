@@ -783,6 +783,9 @@ svg.i{width:14.4px;height:14.4px;flex:none;fill:none;stroke:currentColor;stroke-
 .zc .f>span{display:flex;align-items:center;gap:4.8px;min-width:0}
 .zc .f svg{width:12.8px;height:12.8px}
 .zc .f .tipw{color:var(--warn)}
+.zc .formula{color:var(--ink);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:6.4px 8px}
+.zc .formula b{color:var(--go);font-weight:700}
+.zc .formula .mute{color:var(--mute);white-space:nowrap}
 .zc .hint{color:var(--go);font-weight:600}
 .actions{display:flex;gap:8px;padding:9.6px 9.6px calc(env(safe-area-inset-bottom,0px) + 9.6px);background:rgba(6,12,23,.92);border-top:1px solid var(--line);-webkit-backdrop-filter:blur(11.2px);backdrop-filter:blur(11.2px)}
 .actions button{flex:1;display:flex;align-items:center;justify-content:center;gap:6.4px;padding:11.2px 4.8px;border-radius:12.8px;border:1px solid var(--line);background:var(--panel2);font-weight:600;font-size:12px;white-space:nowrap}
@@ -894,6 +897,7 @@ svg.i{width:14.4px;height:14.4px;flex:none;fill:none;stroke:currentColor;stroke-
     <button data-size="S" aria-pressed="true">Até 20 itens</button>
     <button data-size="M" aria-pressed="false">21–40</button>
     <button data-size="L" aria-pressed="false">40+</button>
+    <button data-size="F" aria-pressed="false">$/item</button>
   </div>
   <div class="carousel" id="carousel" aria-label="Zonas e valores de corte"></div>
   <div class="actions">
@@ -1009,6 +1013,10 @@ function tipFactor(id){const xs=S.batches.filter(b=>b.dest===id&&b.paid!=null&&b
 function bestReturn(d){let best=null;for(const z of ZONES){const t=(z.id===d.id?0:estMin(d,z))+waitFor(z.id).m;if(!best||t<best.t)best={z,t,mi:z.id===d.id?0:roadMi(d,z)}}return best}
 const routeCache={}; // dest id -> {min, mi, geo} from real routing when available
 function legTo(dest){const r=routeCache[dest.id];if(r&&r.from===origin().key)return {min:r.live?r.min:r.min*traffic(),mi:r.mi,real:true,live:!!r.live,delay:r.delay};return {min:estMin(origin(),dest),mi:roadMi(origin(),dest),real:false}}
+function formula(dest){const leg=legTo(dest),back=bestReturn(dest),tf=tipFactor(dest.id);
+ const base=(S.cfg.target*(S.cfg.checkout+leg.min+4+back.t)/60+(leg.mi+back.mi)*S.cfg.mile)*tf;
+ return {base,per:S.cfg.target*S.cfg.secItem/3600*tf}}
+const c2=v=>"$"+v.toFixed(2).replace(".",",");
 function cutoff(dest,size){
  const items=SIZES.find(s=>s.id===size).items;
  const shop=items*S.cfg.secItem/60+S.cfg.checkout;
@@ -1071,11 +1079,12 @@ function render(){
  $("gpsTxt").textContent=({live:"GPS ao vivo"+(fix&&fix.acc?` ±${Math.round(fix.acc)}m`:""),wait:"Buscando GPS…",manual:"Zona manual",denied:"GPS bloqueado",retry:"Tentando GPS…",far:"Fora da área"}[gps]||"")+` · espera ~${Math.round(w.m)} min`+(isPeak()?" · pico":"");
  const rows=ZONES.map(z=>({z,c:Object.fromEntries(SIZES.map(s=>[s.id,cutoff(z,s.id)])),d:crow(origin(),z)})).sort((a,b)=>a.d-b.d);
  // best = lowest required $ per minute of work for the chosen size
- const best=rows.reduce((b,r)=>!b||r.c[size].need/r.c[size].min<b.c[size].need/b.c[size].min?r:b,null);
+ const sz=size==="F"?"S":size;
+ const best=rows.reduce((b,r)=>!b||r.c[sz].need/r.c[sz].min<b.c[sz].need/b.c[sz].min?r:b,null);
  // pins
  pinLayer.clearLayers();
  rows.forEach(r=>{const cls=["pin",r.z.id===sel?"sel":"",r===best?"best":""].join(" ");
-  const m=L.marker([r.z.lat,r.z.lng],{icon:L.divIcon({className:"",html:`<div class="${cls}"><span class="tag">${money(r.c[size].need)}<small>${r.c[size].min}m</small></span><span class="stem"></span></div>`,iconSize:[0,0]}),keyboard:true,title:r.z.n});
+  const m=L.marker([r.z.lat,r.z.lng],{icon:L.divIcon({className:"",html:`<div class="${cls}"><span class="tag">${size==="F"?(f=>`${money(f.base)}<small>+${c2(f.per)}/item</small>`)(formula(r.z)):`${money(r.c[size].need)}<small>${r.c[size].min}m</small>`}</span><span class="stem"></span></div>`,iconSize:[0,0]}),keyboard:true,title:r.z.n});
   m.on("click",()=>{if(sel===r.z.id)openSim(r.z.id);else select(r.z.id,true)});m.addTo(pinLayer)});
  // me
  const o=origin();if(!meMarker)meMarker=L.marker([o.lat,o.lng],{icon:L.divIcon({className:"",html:'<div class="me"></div>',iconSize:[16,16],iconAnchor:[8,8]}),interactive:false,zIndexOffset:1000}).addTo(map);else meMarker.setLatLng([o.lat,o.lng]);
@@ -1084,8 +1093,8 @@ function render(){
  car.innerHTML=rows.map(r=>{const c=r.c,leg=c.S.leg,bk=c.S.back;
   return `<button class="zc" data-z="${r.z.id}" aria-current="${r.z.id===sel}">
    <span class="h"><span class="n"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z" fill="currentColor" stroke="none"/><circle cx="12" cy="10" r="2.6" fill="#0b1424" stroke="none"/></svg><span>${r.z.n}</span></span><span class="eta num"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>${Math.round(leg.min)} min · ${leg.mi.toFixed(1)} mi${leg.live?(leg.delay?` <span class="traffic-on">+${leg.delay} trânsito</span>`:" · livre"):leg.real?"":" ≈"}</span></span>
-   <span class="cuts">${SIZES.map(s=>`<span class="cut ${s.id===size?"on":""}"><span class="k">${s.n}</span><span class="v num">${money(c[s.id].need)}</span><span class="t num"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>${c[s.id].min} min</span></span>`).join("")}</span>
-   ${r.z.id===sel?'<span class="f hint">Toque de novo para simular a oferta →</span>':""}<span class="f"><span><svg class="i" viewBox="0 0 24 24"><path d="m3 17 6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>Depois: ${bk.z.id===r.z.id?"espere lá mesmo":"espere em "+bk.z.n.split(" /")[0]} (~${Math.round(waitFor(bk.z.id).m)} min)</span>${c.S.tf>1?'<span class="tipw">gorjeta costuma cair</span>':""}</span>
+   <span class="cuts">${SIZES.map(s=>`<span class="cut ${s.id===sz?"on":""}"><span class="k">${s.n}</span><span class="v num">${money(c[s.id].need)}</span><span class="t num"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>${c[s.id].min} min</span></span>`).join("")}</span>
+   ${(f=>`<span class="f formula"><span>Base <b>${money(f.base)}</b> + <b>${c2(f.per)}</b> por item</span><span class="mute">ex.: 25 itens = ${money(f.base+25*f.per)}</span></span>`)(formula(r.z))}${r.z.id===sel?'<span class="f hint">Toque de novo para simular a oferta →</span>':""}<span class="f"><span><svg class="i" viewBox="0 0 24 24"><path d="m3 17 6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>Depois: ${bk.z.id===r.z.id?"espere lá mesmo":"espere em "+bk.z.n.split(" /")[0]} (~${Math.round(waitFor(bk.z.id).m)} min)</span>${c.S.tf>1?'<span class="tipw">gorjeta costuma cair</span>':""}</span>
   </button>`}).join("");
  car.scrollLeft=sx;
  renderShift();
@@ -1221,7 +1230,7 @@ async function renderRegion(z){const box=$("sRegion");const now=new Date();
 // ---------- "Se eu aceitar" simulator ----------
 const sim={items:15,value:null,z:null};
 const hhmm=d=>d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
-function openSim(id){sim.z=ZONES.find(z=>z.id===id);sim.items=SIZES.find(s=>s.id===size).items;sim.value=null;
+function openSim(id){sim.z=ZONES.find(z=>z.id===id);sim.items=(SIZES.find(s=>s.id===size)||SIZES[0]).items;sim.value=null;
  $("sItems").value=sim.items;$("sValue").value="";renderSim();renderRegion(sim.z);openSheet("simSheet");setTimeout(()=>$("sValue").focus(),60)}
 function renderSim(){const z=sim.z;if(!z)return;
  const shop=sim.items*S.cfg.secItem/60+S.cfg.checkout,leg=legTo(z),back=bestReturn(z),tf=tipFactor(z.id);
@@ -1288,7 +1297,7 @@ document.addEventListener("click",e=>{const b=e.target.closest("[data-k]");if(!b
 $("bAccept").onclick=()=>{
  if(S.lastDone&&Date.now()-S.lastDone.at<90*60000){S.waits.push({z:S.lastDone.z,b:bucket(S.lastDone.at),m:(Date.now()-S.lastDone.at)/60000});S.lastDone=null}
  if(!S.shift)S.shift={id:Date.now(),start:Date.now()};save();
- pick={size,dest:sel};chips();if(!stores.length){loadStores().then(chips)}$("aTotal").value="";openSheet("acceptSheet");setTimeout(()=>$("aTotal").focus(),50);render()};
+ pick={size:size==="F"?"S":size,dest:sel};chips();if(!stores.length){loadStores().then(chips)}$("aTotal").value="";openSheet("acceptSheet");setTimeout(()=>$("aTotal").focus(),50);render()};
 $("aSave").onclick=()=>{const v=num($("aTotal").value);if(!(v>0)){$("aTotal").focus();toast("Digite o total da oferta, ex.: 34,50");return}
  S.batches.push({id:Date.now(),at:Date.now(),shift:S.shift.id,total:v,size:pick.size,dest:pick.dest||here.id,from:here.id,store:pick.store||null,done:false,paid:null});
  save();closeSheets();toast("Batch salvo");render()};
@@ -1325,7 +1334,7 @@ $("wipeYes").onclick=()=>{const cfg=S.cfg;S=structuredClone(DEF);S.cfg=cfg;save(
 
 async function wake(){try{await navigator.wakeLock?.request("screen")}catch(e){}}
 document.addEventListener("visibilitychange",()=>{if(!document.hidden){wake();render()}});
-const APP_VERSION="2026-10-06.11";
+const APP_VERSION="2026-10-06.12";
 (async()=>{try{const r=await fetch("./?t="+Date.now(),{cache:"no-store"});const t=await r.text();const m=t.match(/APP_VERSION="([^"]+)"/);
  if(m&&m[1]!==APP_VERSION&&sessionStorage.getItem("reloadedFor")!==m[1]){sessionStorage.setItem("reloadedFor",m[1]);location.replace("./?v="+encodeURIComponent(m[1]))}}catch(e){}})();
 setTraffic();save();wake();startGPS();render();setInterval(render,30000);setInterval(renderShift,1000);
