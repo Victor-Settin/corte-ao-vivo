@@ -720,6 +720,13 @@ button{cursor:pointer}
 .iconbtn{width:46px;display:grid;place-items:center;border-radius:14px}
 .iconbtn svg{width:20px;height:20px;stroke:var(--ink);fill:none;stroke-width:1.8}
 
+.layerbtn{position:fixed;right:12px;top:calc(env(safe-area-inset-top,0px) + 74px);height:46px;z-index:500}
+.layers{position:fixed;right:12px;top:calc(env(safe-area-inset-top,0px) + 126px);z-index:600;padding:6px;display:grid;gap:2px;width:220px}
+.layers button{display:grid;text-align:left;gap:1px;border:0;background:transparent;border-radius:10px;padding:9px 10px}
+.layers button b{font-weight:600}
+.layers button span{font-size:12px;color:var(--mute)}
+.layers button[aria-checked="true"]{background:var(--go-soft)}
+.layers button[aria-checked="true"] b{color:var(--go)}
 .shift{position:fixed;top:calc(env(safe-area-inset-top,0px) + 74px);left:12px;display:flex;gap:12px;padding:6px 12px;font-size:13px;z-index:500;border-radius:999px}
 .shift b{font-weight:600}
 .shift span{color:var(--mute)}
@@ -802,6 +809,9 @@ button{cursor:pointer}
   <button class="card iconbtn" id="openMenu" aria-label="Turno e ajustes"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
 </div>
 
+<button class="card iconbtn layerbtn" id="layerBtn" aria-label="Camadas do mapa" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="m3 13 9 5 9-5"/></svg></button>
+<div class="card layers" id="layerPop" hidden role="menu" aria-label="Camadas"></div>
+
 <div class="card shift" id="shiftBar" hidden>
   <span>Turno</span><b class="num" id="sEarn">$0</b><b class="num" id="sHrs">0:00</b><b class="num ok" id="sRate">—</b>
 </div>
@@ -876,7 +886,7 @@ const SIZES=[{id:"S",n:"Até 20",items:15},{id:"M",n:"21–40",items:30},{id:"L"
 
 // ---------- Storage ----------
 const KEY="corteAoVivo.v1";
-const DEF={cfg:{target:30,mile:0.35,secItem:112,checkout:6,manual:false,zone:"daly",metaSet:true},batches:[],waits:[],shift:null,lastDone:null};
+const DEF={cfg:{target:30,layer:"ruas",mile:0.35,secItem:112,checkout:6,manual:false,zone:"daly",metaSet:true},batches:[],waits:[],shift:null,lastDone:null};
 function load(){try{const r=JSON.parse(localStorage.getItem(KEY));if(r&&r.cfg){const o=Object.assign(structuredClone(DEF),r);o.cfg=Object.assign(structuredClone(DEF.cfg),r.cfg);return o}}catch(e){}return structuredClone(DEF)}
 let S=load();
 if(!S.cfg.metaSet){if(S.cfg.target===25)S.cfg.target=30;S.cfg.metaSet=true}
@@ -916,10 +926,18 @@ function origin(){return fix?{lat:fix.lat,lng:fix.lng,key:fix.key}:{lat:here.lat
 const $=id=>document.getElementById(id);
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const dark=()=>{const t=document.documentElement.dataset.theme;return t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches};
-const map=L.map("map",{zoomControl:false,attributionControl:true}).fitBounds([[37.66,-122.51],[37.81,-122.38]],{paddingTopLeft:[10,90],paddingBottomRight:[10,260]});
-let tiles=null;
-function setTiles(){if(tiles)map.removeLayer(tiles);
- tiles=L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/${dark()?"World_Dark_Gray_Base":"World_Light_Gray_Base"}/MapServer/tile/{z}/{y}/{x}`,{maxZoom:16,attribution:'Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap'}).addTo(map);tiles.once("tileload",()=>{tilesOk=true;if(typeof shapeLayer!=="undefined")map.removeLayer(shapeLayer)})}
+const map=L.map("map",{zoomControl:false,attributionControl:true,maxZoom:19}).fitBounds([[37.66,-122.51],[37.81,-122.38]],{paddingTopLeft:[10,90],paddingBottomRight:[10,260]});
+let tiles=null,tilesOk=false;
+const ESRI="https://server.arcgisonline.com/ArcGIS/rest/services/";
+const LAYERS={
+ ruas:{n:"Ruas",d:"Ruas e prédios",url:()=>ESRI+"World_Street_Map/MapServer/tile/{z}/{y}/{x}",max:19},
+ sat:{n:"Satélite",d:"Foto com nomes de ruas",url:()=>ESRI+"World_Imagery/MapServer/tile/{z}/{y}/{x}",max:19,over:[ESRI+"Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}",ESRI+"Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"]},
+ terreno:{n:"Terreno",d:"Relevo e parques",url:()=>ESRI+"World_Topo_Map/MapServer/tile/{z}/{y}/{x}",max:19},
+ limpo:{n:"Limpo",d:"Só os preços em destaque",url:()=>ESRI+"Canvas/"+(dark()?"World_Dark_Gray_Base":"World_Light_Gray_Base")+"/MapServer/tile/{z}/{y}/{x}",max:16}};
+function setTiles(){if(tiles)map.removeLayer(tiles);const ly=LAYERS[S.cfg.layer]||LAYERS.ruas;
+ const base=L.tileLayer(ly.url(),{maxZoom:19,maxNativeZoom:ly.max,attribution:"Tiles © Esri — Esri, HERE, Garmin, Maxar, © OpenStreetMap"});
+ tiles=L.layerGroup([base,...(ly.over||[]).map(u=>L.tileLayer(u,{maxZoom:19}))]).addTo(map);
+ base.once("tileload",()=>{tilesOk=true;if(typeof shapeLayer!=="undefined")map.removeLayer(shapeLayer)})}
 setTiles();matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{setTiles();setTimeout(()=>{drawBase();drawAreas();render()},50)});
 new MutationObserver(setTiles).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
 
@@ -928,7 +946,7 @@ const COAST=[[37.630,-122.497],[37.670,-122.497],[37.700,-122.503],[37.735,-122.
 const ROADS={"280":[[37.470,-122.270],[37.560,-122.360],[37.620,-122.440],[37.640,-122.468],[37.690,-122.468],[37.708,-122.460],[37.725,-122.445],[37.735,-122.430],[37.745,-122.405],[37.765,-122.398],[37.776,-122.397]],
  "101":[[37.485,-122.225],[37.560,-122.310],[37.600,-122.385],[37.640,-122.405],[37.660,-122.405],[37.700,-122.398],[37.730,-122.400],[37.750,-122.405],[37.766,-122.408],[37.772,-122.420],[37.790,-122.423],[37.800,-122.440],[37.803,-122.460],[37.810,-122.475]],
  "19th Ave":[[37.700,-122.474],[37.720,-122.475],[37.765,-122.476],[37.789,-122.475]]};
-const baseLayer=L.layerGroup().addTo(map),shapeLayer=L.layerGroup();let tilesOk=false;
+const baseLayer=L.layerGroup().addTo(map),shapeLayer=L.layerGroup();
 function drawBase(){baseLayer.clearLayers();shapeLayer.clearLayers();if(!tilesOk)shapeLayer.addTo(map);
  L.polygon(COAST,{stroke:false,fillColor:css("--land"),fillOpacity:1,interactive:false}).addTo(shapeLayer);
  L.rectangle([[37.7652,-122.5105],[37.7715,-122.4540]],{stroke:false,fillColor:css("--park"),fillOpacity:1,interactive:false}).addTo(shapeLayer);
@@ -991,6 +1009,12 @@ async function select(id,fromMap){sel=id;const z=ZONES.find(z=>z.id===id);render
 $("carousel").addEventListener("click",e=>{const c=e.target.closest(".zc");if(c)select(c.dataset.z,false)});
 document.querySelector(".seg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;size=b.dataset.size;
  document.querySelectorAll(".seg button").forEach(x=>x.setAttribute("aria-pressed",x===b));render()});
+
+// ---------- Layer picker ----------
+function renderLayers(){$("layerPop").innerHTML=Object.entries(LAYERS).map(([k,v])=>`<button role="menuitemradio" aria-checked="${(S.cfg.layer||"ruas")===k}" data-layer="${k}"><b>${v.n}</b><span>${v.d}</span></button>`).join("")}
+$("layerBtn").onclick=()=>{const open=$("layerPop").hidden;renderLayers();$("layerPop").hidden=!open;$("layerBtn").setAttribute("aria-expanded",open)};
+$("layerPop").addEventListener("click",e=>{const b=e.target.closest("[data-layer]");if(!b)return;S.cfg.layer=b.dataset.layer;save();setTiles();$("layerPop").hidden=true;$("layerBtn").setAttribute("aria-expanded",false)});
+map.on("click",()=>{$("layerPop").hidden=true});
 
 // ---------- GPS ----------
 function startGPS(){
