@@ -930,7 +930,7 @@ svg.i{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-widt
 <div class="sheet" id="menuSheet" hidden role="dialog" aria-labelledby="menuH">
   <h2 id="menuH">Turno e ajustes</h2>
   <div class="field"><span>Batches recentes · preencha o valor recebido quando cair</span><div class="loglist" id="log"></div></div>
-  <div class="field"><span>Turnos anteriores</span><div class="loglist" id="shiftLog"></div></div>
+  <div class="field"><span>Dias anteriores</span><div class="loglist" id="shiftLog"></div></div>
   <div class="row">
     <label class="field" for="cfgSec"><span>Segundos por item</span><input id="cfgSec" type="number" inputmode="numeric"></label>
     <label class="field" for="cfgCheck"><span>Checkout (min)</span><input id="cfgCheck" type="number" inputmode="numeric"></label>
@@ -978,6 +978,7 @@ const KEY="corteAoVivo.v1";
 const DEF={shifts:[],cfg:{target:30,layer:"noite",mile:0.35,secItem:112,checkout:6,manual:false,zone:"daly",metaSet:true},batches:[],waits:[],shift:null,lastDone:null};
 function load(){try{const r=JSON.parse(localStorage.getItem(KEY)||localStorage.getItem(KEY+".bak"));if(r&&r.cfg){const o=Object.assign(structuredClone(DEF),r);o.cfg=Object.assign(structuredClone(DEF.cfg),r.cfg);return o}}catch(e){}return structuredClone(DEF)}
 let S=load();
+if(!S.day){S.day={date:(d=>`${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`)(new Date()),segs:[]}}
 if(!S.cfg.designV2){S.cfg.layer="noite";S.cfg.designV2=true}
 if(!S.cfg.metaSet){if(S.cfg.target===25)S.cfg.target=30;S.cfg.metaSet=true}
 function save(){const j=JSON.stringify(S);try{localStorage.setItem(KEY,j);localStorage.setItem(KEY+".bak",j)}catch(e){toast&&toast("Não consegui salvar neste navegador (modo anônimo?)")}}
@@ -1087,13 +1088,30 @@ function render(){
  car.scrollLeft=sx;
  renderShift();
 }
-function renderShift(){const sh=S.shift;$("sLabel").textContent=sh?"Turno":"Parado";$("sLabel").className=sh?"ok":"";if(!endArm||Date.now()-endArm>3000)$("bShiftTxt").textContent=sh?"Encerrar":"Iniciar turno";
- $("bDone").disabled=!S.batches.some(b=>sh&&b.shift===sh.id&&!b.done);
- if(!sh){$("sEarn").textContent="$0.00";$("sHrs").textContent="0:00:00";$("sRate").textContent="$0/h";return}const list=S.batches.filter(b=>b.shift===sh.id);const earn=list.reduce((s,b)=>s+(b.paid??b.total),0);const mins=(Date.now()-sh.start)/60000;
- const sec=Math.floor((Date.now()-sh.start)/1000),p2=n=>String(n).padStart(2,"0");
- $("sEarn").textContent="$"+earn.toFixed(2);$("sHrs").textContent=`${Math.floor(sec/3600)}:${p2(Math.floor(sec/60)%60)}:${p2(sec%60)}`;
- // live $/h from the orders you logged; shown after the first minute so it doesn't spike
- $("sRate").textContent=mins>=1&&earn>0?"$"+(earn/(mins/60)).toFixed(2)+"/h":"$0/h"}
+// ---------- Day ledger: pausing keeps today's totals; everything rolls over at midnight ----------
+const dayKey=(t=Date.now())=>{const d=new Date(t);return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`};
+function rollDay(){const today=dayKey();
+ if(!S.day){S.day={date:today,segs:[]};if(S.shift){S.day.segs=[];}return}
+ if(S.day.date===today)return;
+ // close yesterday: split a shift that ran past midnight
+ const mid=new Date();mid.setHours(0,0,0,0);const midT=mid.getTime();
+ if(S.shift&&S.shift.start<midT){S.day.segs.push({start:S.shift.start,end:midT});S.shift={id:midT,start:midT}}
+ const old=S.day,earn=S.batches.filter(b=>dayKey(b.at)===old.date).reduce((a,b)=>a+(b.paid??b.total),0);
+ const n=S.batches.filter(b=>dayKey(b.at)===old.date).length,mins=old.segs.reduce((a,x)=>a+(x.end-x.start),0)/60000;
+ if(n||mins>0)(S.shifts=S.shifts||[]).push({start:old.segs[0]?.start??midT-864e5,end:old.segs.at(-1)?.end??midT,earn,n,mins,rate:mins>=1?earn/(mins/60):0,day:old.date});
+ S.day={date:today,segs:[]};save()}
+function dayTotals(){rollDay();const now=Date.now();
+ const ms=S.day.segs.reduce((a,x)=>a+(x.end-x.start),0)+(S.shift?now-Math.max(S.shift.start,new Date().setHours(0,0,0,0)):0);
+ const list=S.batches.filter(b=>dayKey(b.at)===S.day.date);
+ return {ms,earn:list.reduce((a,b)=>a+(b.paid??b.total),0),n:list.length}}
+function renderShift(){const sh=S.shift,t=dayTotals();
+ $("sLabel").textContent=sh?"Hoje":t.ms>0||t.n?"Pausado":"Parado";$("sLabel").className=sh?"ok":"";
+ $("bShiftTxt").textContent=sh?"Pausar":t.ms>0?"Retomar":"Iniciar turno";
+ $("bDone").disabled=!S.batches.some(b=>!b.done&&dayKey(b.at)===S.day.date);
+ const sec=Math.floor(t.ms/1000),mins=t.ms/60000,p2=n=>String(n).padStart(2,"0");
+ $("sEarn").textContent="$"+t.earn.toFixed(2);$("sHrs").textContent=`${Math.floor(sec/3600)}:${p2(Math.floor(sec/60)%60)}:${p2(sec%60)}`;
+ // live $/h for the day from the orders you logged; shown after the first minute so it doesn't spike
+ $("sRate").textContent=mins>=1&&t.earn>0?"$"+(t.earn/(mins/60)).toFixed(2)+"/h":"$0/h"}
 
 // ---------- Selection + route ----------
 async function select(id,fromMap){sel=id;const z=ZONES.find(z=>z.id===id);render();
@@ -1272,17 +1290,15 @@ $("bAccept").onclick=()=>{
 $("aSave").onclick=()=>{const v=num($("aTotal").value);if(!(v>0)){$("aTotal").focus();toast("Digite o total da oferta, ex.: 34,50");return}
  S.batches.push({id:Date.now(),at:Date.now(),shift:S.shift.id,total:v,size:pick.size,dest:pick.dest||here.id,from:here.id,store:pick.store||null,done:false,paid:null});
  save();closeSheets();toast("Batch salvo");render()};
-$("bDone").onclick=()=>{S.batches.filter(b=>b.shift===S.shift?.id&&!b.done).forEach(b=>b.done=true);S.lastDone={z:here.id,at:Date.now()};save();toast("Entrega registrada");render()};
+$("bDone").onclick=()=>{S.batches.filter(b=>!b.done&&dayKey(b.at)===S.day.date).forEach(b=>b.done=true);S.lastDone={z:here.id,at:Date.now()};save();toast("Entrega registrada");render()};
 let endArm=0;
-$("bShift").onclick=()=>{
- if(!S.shift){S.shift={id:Date.now(),start:Date.now()};S.lastDone=null;save();toast("Turno iniciado");render();return}
- if(Date.now()-endArm>3000){endArm=Date.now();$("bShiftTxt").textContent="Confirmar?";toast("Toque de novo para encerrar o turno");setTimeout(()=>renderShift(),3000);return}
- const list=S.batches.filter(b=>b.shift===S.shift.id),earn=list.reduce((s,b)=>s+(b.paid??b.total),0),mins=(Date.now()-S.shift.start)/60000;
- (S.shifts=S.shifts||[]).push({start:S.shift.start,end:Date.now(),earn,n:list.length,rate:mins>=1?earn/(mins/60):0});
- S.shift=null;S.lastDone=null;endArm=0;save();toast(`Turno salvo: $${earn.toFixed(2)} em ${Math.floor(mins/60)}h${String(Math.round(mins%60)).padStart(2,"0")}`);render()};
+$("bShift").onclick=()=>{rollDay();
+ if(!S.shift){S.shift={id:Date.now(),start:Date.now()};S.lastDone=null;save();toast(S.day.segs.length?"Turno retomado":"Turno iniciado");render();return}
+ S.day.segs.push({start:Math.max(S.shift.start,new Date().setHours(0,0,0,0)),end:Date.now()});S.shift=null;S.lastDone=null;save();
+ const t=dayTotals();toast(`Pausado · hoje: $${t.earn.toFixed(2)} em ${Math.floor(t.ms/36e5)}h${String(Math.floor(t.ms/6e4)%60).padStart(2,"0")}`);render()};
 $("openMenu").onclick=()=>{renderLog();openSheet("menuSheet")};
 function renderShiftLog(){const xs=(S.shifts||[]).slice(-7).reverse();
- $("shiftLog").innerHTML=xs.length?xs.map(x=>{const m=(x.end-x.start)/60000;return `<div class="li"><div class="l"><b class="num">$${x.earn.toFixed(2)}</b> · ${x.n} batch(es)<small>${new Date(x.start).toLocaleString("pt-BR",{weekday:"short",day:"2-digit",hour:"2-digit",minute:"2-digit"})} · ${Math.floor(m/60)}h${String(Math.round(m%60)).padStart(2,"0")}</small></div><b class="num ok">$${x.rate.toFixed(2)}/h</b></div>`}).join(""):'<p class="note">Os turnos encerrados aparecem aqui.</p>'}
+ $("shiftLog").innerHTML=xs.length?xs.map(x=>{const m=x.mins??(x.end-x.start)/60000;return `<div class="li"><div class="l"><b class="num">$${x.earn.toFixed(2)}</b> · ${x.n} batch(es)<small>${new Date(x.start).toLocaleString("pt-BR",{weekday:"short",day:"2-digit",hour:"2-digit",minute:"2-digit"})} · ${Math.floor(m/60)}h${String(Math.round(m%60)).padStart(2,"0")}</small></div><b class="num ok">$${x.rate.toFixed(2)}/h</b></div>`}).join(""):'<p class="note">Cada dia aparece aqui depois da meia-noite.</p>'}
 function renderLog(){renderShiftLog();const rec=S.batches.slice(-12).reverse();
  $("log").innerHTML=rec.length?rec.map(b=>{const z=ZONES.find(z=>z.id===b.dest);const t=new Date(b.at).toLocaleString("pt-BR",{weekday:"short",hour:"2-digit",minute:"2-digit"});
   const paid=b.paid!=null?`<b class="num ${b.paid>=b.total?"ok":"bad"}">${money(b.paid)}</b>`:`<input type="text" inputmode="decimal" placeholder="recebido" aria-label="Valor recebido" data-paid="${b.id}">`;
@@ -1307,7 +1323,7 @@ $("wipeYes").onclick=()=>{const cfg=S.cfg;S=structuredClone(DEF);S.cfg=cfg;save(
 
 async function wake(){try{await navigator.wakeLock?.request("screen")}catch(e){}}
 document.addEventListener("visibilitychange",()=>{if(!document.hidden){wake();render()}});
-const APP_VERSION="2026-10-06.9";
+const APP_VERSION="2026-10-06.10";
 (async()=>{try{const r=await fetch("./?t="+Date.now(),{cache:"no-store"});const t=await r.text();const m=t.match(/APP_VERSION="([^"]+)"/);
  if(m&&m[1]!==APP_VERSION&&sessionStorage.getItem("reloadedFor")!==m[1]){sessionStorage.setItem("reloadedFor",m[1]);location.replace("./?v="+encodeURIComponent(m[1]))}}catch(e){}})();
 setTraffic();save();wake();startGPS();render();setInterval(render,30000);setInterval(renderShift,1000);
