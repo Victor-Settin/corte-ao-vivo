@@ -753,6 +753,27 @@ button{cursor:pointer}
 .stepper{display:flex;align-items:center;gap:8px}
 .stepper button{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);font-size:20px;font-weight:600}
 .stepper input{text-align:center}
+.region{display:grid;gap:10px}
+.region h3{font-family:var(--display);font-size:18px;margin:0}
+.demand{display:grid;gap:6px}
+.dbars{display:grid;grid-template-columns:repeat(18,1fr);align-items:end;gap:2px;height:56px}
+.dbars i{display:block;background:var(--line);border-radius:3px 3px 0 0;min-height:3px}
+.dbars i.now{background:var(--go)}
+.dlab{display:flex;justify-content:space-between;font-size:11px;color:var(--mute)}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.kpi{background:var(--panel2);border-radius:10px;padding:8px}
+.kpi .v{font-family:var(--display);font-weight:700;font-size:18px}
+.kpi .k{font-size:11px;color:var(--mute)}
+.slist{display:grid;gap:6px}
+.srow{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:10px;border:1px solid var(--line);border-radius:12px}
+.srow b{font-weight:600}
+.srow .pct{font-family:var(--display);font-weight:700;font-size:18px;text-align:right}
+.srow .meta{font-size:12px;color:var(--mute)}
+.srow .bar{grid-column:1/-1;height:5px;border-radius:3px;background:var(--panel2);overflow:hidden}
+.srow .bar i{display:block;height:100%;background:var(--go)}
+.srow.closed{opacity:.55}
+.srow.closed .bar i{background:var(--mute)}
+.src{font-size:11px;color:var(--mute)}
 .shift{position:fixed;top:calc(env(safe-area-inset-top,0px) + 74px);left:12px;display:flex;gap:12px;padding:6px 12px;font-size:13px;z-index:500;border-radius:999px}
 .shift b{font-weight:600}
 .shift span{color:var(--mute)}
@@ -866,6 +887,7 @@ button{cursor:pointer}
     <input id="aTotal" type="number" inputmode="decimal" step="0.01" placeholder="0.00"></label>
   <div class="field"><span>Tamanho</span><div class="chips" id="aSize"></div></div>
   <div class="field"><span>Entrega em</span><div class="chips" id="aDest"></div></div>
+  <div class="field"><span>Loja da compra (alimenta suas estatísticas)</span><div class="chips" id="aStore"></div></div>
   <div class="row"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="aSave">Salvar</button></div>
 </div>
 
@@ -879,6 +901,7 @@ button{cursor:pointer}
   <div class="verdict" id="sVerdict"></div>
   <div class="timeline" id="sTimeline"></div>
   <p class="note" id="sStores"></p>
+  <div class="region" id="sRegion"></div>
   <div class="row"><button class="btn" data-close>Fechar</button><button class="btn primary" id="sAccept">Aceitei esta</button></div>
 </div>
 
@@ -1087,11 +1110,55 @@ function drawStores(){storeLayer.clearLayers();stores.forEach(st=>{const os=open
 function nearbyOpen(n=3){const o=origin();return stores.map(st=>({st,os:openState(st.oh),d:crow(o,st)})).filter(x=>x.os?.open).sort((a,b)=>a.d-b.d).slice(0,n)}
 $("storeBtn").onclick=()=>{storesOn=!storesOn;$("storeBtn").setAttribute("aria-pressed",storesOn);if(storesOn){storeLayer.addTo(map);loadStores()}else map.removeLayer(storeLayer)};
 
+// ---------- Stores per region ----------
+// rough relative order volume by chain; replaced by your own history as it grows
+const CHAIN_W=[[/costco/i,1],[/safeway/i,1],[/lucky/i,.65],[/sprouts/i,.6],[/foods co/i,.55],[/smart ?& ?final/i,.5],[/mollie stone/i,.5],[/nob hill|raley/i,.5],[/save mart/i,.5],[/andronico/i,.45],[/grocery outlet/i,.4],[/99 ranch/i,.4],[/food 4 less/i,.4],[/cvs/i,.3],[/walgreens/i,.3],[/petco/i,.15],[/staples/i,.1]];
+const chainW=n=>(CHAIN_W.find(([r])=>r.test(n))||[0,.2])[1];
+const regionCache={};
+async function storesAround(z,km=2.6){if(regionCache[z.id])return regionCache[z.id];
+ const q=`[out:json][timeout:20];nwr["shop"~"supermarket|convenience|chemist|wholesale|pet|department_store"]["name"](around:${km*1000},${z.lat},${z.lng});out center tags;`;
+ const r=await fetch("https://overpass-api.de/api/interpreter",{method:"POST",body:"data="+encodeURIComponent(q),headers:{"Content-Type":"application/x-www-form-urlencoded"}});
+ const j=await r.json();const list=j.elements.map(e=>({name:e.tags.brand||e.tags.name,lat:e.lat??e.center?.lat,lng:e.lon??e.center?.lon,oh:e.tags.opening_hours,addr:[e.tags["addr:housenumber"],e.tags["addr:street"]].filter(Boolean).join(" ")})).filter(x=>x.lat&&CHAINS.test(x.name));
+ regionCache[z.id]={list,at:Date.now()};return regionCache[z.id]}
+function minsToClose(oh,d=new Date()){const os=openState(oh,d);if(!os||!os.open)return null;if(oh.trim()==="24/7")return 1440;
+ const m=os.txt.match(/fecha (\d{1,2}:\d{2}|meia-noite)/);if(!m)return null;const c=m[1]==="meia-noite"?1440:hm(m[1]);const now=d.getHours()*60+d.getMinutes();return (c-now+1440)%1440}
+// demand index 0–100 for a given hour (inverse of the wait factor, peak = 100)
+function demandAt(h,d=new Date()){const x=new Date(d);x.setHours(h,30,0,0);return Math.round(Math.min(100,.7/hourFactor(x)*100))}
+function regionStats(z){const bs=S.batches.filter(b=>b.dest===z.id);const ws=S.waits.filter(w=>w.z===z.id);
+ const avg=a=>a.length?a.reduce((s,x)=>s+x,0)/a.length:null;
+ const paid=bs.filter(b=>b.paid!=null&&b.total>0);
+ return {n:bs.length,avgTotal:avg(bs.map(b=>b.total)),tipDelta:paid.length?avg(paid.map(b=>(b.paid-b.total)/b.total*100)):null,wait:avg(ws.map(w=>w.m)),nw:ws.length}}
+async function renderRegion(z){const box=$("sRegion");const now=new Date();
+ const hours=[...Array(18)].map((_,i)=>6+i);const dNow=demandAt(now.getHours());
+ const st=regionStats(z);
+ box.innerHTML=`<h3>Região de ${z.n}</h3>
+ <div class="demand"><div class="dlab"><span>Demanda esperada hoje</span><b class="${dNow>=70?"ok":""}">${dNow}% agora</b></div>
+ <div class="dbars" aria-label="Demanda por hora">${hours.map(h=>`<i class="${h===now.getHours()?"now":""}" style="height:${Math.max(4,demandAt(h))}%" title="${h}h: ${demandAt(h)}%"></i>`).join("")}</div>
+ <div class="dlab"><span>6h</span><span>12h</span><span>18h</span><span>23h</span></div>
+ <span class="src">Curva típica de ${[0,6].includes(now.getDay())?"fim de semana":"dia útil"} (estimativa). Sua espera real na zona entra no cálculo de “Próxima oferta”.</span></div>
+ <div class="kpis"><div class="kpi"><div class="v num">${st.n}</div><div class="k">seus batches aqui</div></div>
+ <div class="kpi"><div class="v num">${st.avgTotal?"$"+st.avgTotal.toFixed(0):"—"}</div><div class="k">total médio</div></div>
+ <div class="kpi"><div class="v num ${st.tipDelta<0?"bad":st.tipDelta>0?"ok":""}">${st.tipDelta==null?"—":(st.tipDelta>0?"+":"")+st.tipDelta.toFixed(0)+"%"}</div><div class="k">gorjeta vs oferta</div></div></div>
+ <div class="slist" id="sList"><p class="note">Carregando lojas da região…</p></div>`;
+ let data;try{data=await storesAround(z)}catch(e){$("sList").innerHTML='<p class="note">Não deu para carregar as lojas agora (sem internet ou serviço ocupado). Tente de novo em instantes.</p>';return}
+ if(sim.z!==z)return;
+ const hist=n=>S.batches.filter(b=>b.store&&b.store===n).length;
+ const rows=data.list.map(x=>{const os=openState(x.oh),mc=minsToClose(x.oh),h=hist(x.name);
+  const open=os?os.open:null;const tail=mc==null?1:mc<45?.3:mc<90?.7:1;
+  const score=(open===false?0:open==null?.5:1)*chainW(x.name)*tail*(1+h/4);
+  return {...x,os,h,score,d:crow(z,x)}});
+ const sum=rows.reduce((s,r)=>s+r.score,0)||1;
+ rows.sort((a,b)=>b.score-a.score||a.d-b.d);
+ $("sList").innerHTML=rows.length?`<div class="dlab"><span>Lojas perto da entrega</span><span>chance de oferta*</span></div>`+rows.slice(0,8).map(r=>{const pct=Math.round(r.score/sum*100);
+  return `<div class="srow ${r.os&&!r.os.open?"closed":""}"><div><b>${r.name}</b><div class="meta">${r.addr?r.addr+" · ":""}${r.os?r.os.txt:"horário não informado"} · ${r.d.toFixed(1)} mi${r.h?` · ${r.h} batch(es) seus`:""}</div></div><span class="pct num">${pct}%</span><span class="bar"><i style="width:${pct}%"></i></span></div>`}).join("")+
+  `<p class="src">* Participação estimada nas ofertas da região agora: tamanho típico da rede × aberta/fechando × seu histórico na loja. Lojas e horários: OpenStreetMap, atualizado em ${new Date(data.at).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}. Confirme no app da Instacart.</p>`
+  :'<p class="note">Nenhuma rede conhecida encontrada num raio de 1,6 mi.</p>'}
+
 // ---------- "Se eu aceitar" simulator ----------
 const sim={items:15,value:null,z:null};
 const hhmm=d=>d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
 function openSim(id){sim.z=ZONES.find(z=>z.id===id);sim.items=SIZES.find(s=>s.id===size).items;sim.value=null;
- $("sItems").value=sim.items;$("sValue").value="";renderSim();openSheet("simSheet");setTimeout(()=>$("sValue").focus(),60)}
+ $("sItems").value=sim.items;$("sValue").value="";renderSim();renderRegion(sim.z);openSheet("simSheet");setTimeout(()=>$("sValue").focus(),60)}
 function renderSim(){const z=sim.z;if(!z)return;
  const shop=sim.items*S.cfg.secItem/60+S.cfg.checkout,leg=legTo(z),back=bestReturn(z),tf=tipFactor(z.id);
  const total=shop+leg.min+4+back.t,work=shop+leg.min+4,mi=leg.mi+back.mi,cost=mi*S.cfg.mile;
@@ -1133,15 +1200,17 @@ $("scrim").onclick=closeSheets;document.querySelectorAll("[data-close]").forEach
 function toast(t){const d=document.createElement("div");d.className="toast";d.textContent=t;document.body.append(d);setTimeout(()=>d.remove(),1800)}
 
 let pick={size:"S",dest:null};
+function storeChoices(){return nearbyOpen(6).map(x=>x.st.name).filter((n,i,a)=>a.indexOf(n)===i)}
 function chips(){ $("aSize").innerHTML=SIZES.map(s=>`<button type="button" data-k="size" data-v="${s.id}" aria-pressed="${pick.size===s.id}">${s.n}</button>`).join("");
- $("aDest").innerHTML=ZONES.map(z=>`<button type="button" data-k="dest" data-v="${z.id}" aria-pressed="${pick.dest===z.id}">${z.n.split(" /")[0]}</button>`).join("")}
+ $("aDest").innerHTML=ZONES.map(z=>`<button type="button" data-k="dest" data-v="${z.id}" aria-pressed="${pick.dest===z.id}">${z.n.split(" /")[0]}</button>`).join("");
+ const sc=storeChoices();$("aStore").innerHTML=sc.length?sc.map(n=>`<button type="button" data-k="store" data-v="${n}" aria-pressed="${pick.store===n}">${n}</button>`).join(""):'<span class="note">Ative o ícone de loja no mapa para escolher a loja.</span>'}
 document.addEventListener("click",e=>{const b=e.target.closest("[data-k]");if(!b)return;pick[b.dataset.k]=b.dataset.v;chips()});
 $("bAccept").onclick=()=>{
  if(S.lastDone&&Date.now()-S.lastDone.at<90*60000){S.waits.push({z:S.lastDone.z,b:bucket(S.lastDone.at),m:(Date.now()-S.lastDone.at)/60000});S.lastDone=null}
  if(!S.shift)S.shift={id:Date.now(),start:Date.now()};save();
- pick={size,dest:sel};chips();$("aTotal").value="";openSheet("acceptSheet");setTimeout(()=>$("aTotal").focus(),50);render()};
+ pick={size,dest:sel};chips();if(!stores.length){loadStores().then(chips)}$("aTotal").value="";openSheet("acceptSheet");setTimeout(()=>$("aTotal").focus(),50);render()};
 $("aSave").onclick=()=>{const v=parseFloat($("aTotal").value);if(!(v>0)){$("aTotal").focus();return}
- S.batches.push({id:Date.now(),at:Date.now(),shift:S.shift.id,total:v,size:pick.size,dest:pick.dest||here.id,from:here.id,done:false,paid:null});
+ S.batches.push({id:Date.now(),at:Date.now(),shift:S.shift.id,total:v,size:pick.size,dest:pick.dest||here.id,from:here.id,store:pick.store||null,done:false,paid:null});
  save();closeSheets();toast("Batch salvo");render()};
 $("bDone").onclick=()=>{S.batches.filter(b=>b.shift===S.shift?.id&&!b.done).forEach(b=>b.done=true);S.lastDone={z:here.id,at:Date.now()};save();toast("Entrega registrada");render()};
 $("bShift").onclick=()=>{S.shift=S.shift?null:{id:Date.now(),start:Date.now()};S.lastDone=null;save();toast(S.shift?"Turno iniciado":"Turno encerrado");render()};
@@ -1165,7 +1234,7 @@ $("wipeYes").onclick=()=>{const cfg=S.cfg;S=structuredClone(DEF);S.cfg=cfg;save(
 
 async function wake(){try{await navigator.wakeLock?.request("screen")}catch(e){}}
 document.addEventListener("visibilitychange",()=>{if(!document.hidden){wake();render()}});
-const APP_VERSION="2026-10-06.5";
+const APP_VERSION="2026-10-06.6";
 (async()=>{try{const r=await fetch("./?t="+Date.now(),{cache:"no-store"});const t=await r.text();const m=t.match(/APP_VERSION="([^"]+)"/);
  if(m&&m[1]!==APP_VERSION&&sessionStorage.getItem("reloadedFor")!==m[1]){sessionStorage.setItem("reloadedFor",m[1]);location.replace("./?v="+encodeURIComponent(m[1]))}}catch(e){}})();
 save();wake();startGPS();render();setInterval(render,30000);setInterval(renderShift,1000);
