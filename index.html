@@ -1,0 +1,1038 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Corte">
+<title>Corte ao Vivo</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101317">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@600;700&display=swap">
+<style>/* required styles */
+
+.leaflet-pane,
+.leaflet-tile,
+.leaflet-marker-icon,
+.leaflet-marker-shadow,
+.leaflet-tile-container,
+.leaflet-pane > svg,
+.leaflet-pane > canvas,
+.leaflet-zoom-box,
+.leaflet-image-layer,
+.leaflet-layer {
+	position: absolute;
+	left: 0;
+	top: 0;
+	}
+.leaflet-container {
+	overflow: hidden;
+	}
+.leaflet-tile,
+.leaflet-marker-icon,
+.leaflet-marker-shadow {
+	-webkit-user-select: none;
+	   -moz-user-select: none;
+	        user-select: none;
+	  -webkit-user-drag: none;
+	}
+/* Prevents IE11 from highlighting tiles in blue */
+.leaflet-tile::selection {
+	background: transparent;
+}
+/* Safari renders non-retina tile on retina better with this, but Chrome is worse */
+.leaflet-safari .leaflet-tile {
+	image-rendering: -webkit-optimize-contrast;
+	}
+/* hack that prevents hw layers "stretching" when loading new tiles */
+.leaflet-safari .leaflet-tile-container {
+	width: 1600px;
+	height: 1600px;
+	-webkit-transform-origin: 0 0;
+	}
+.leaflet-marker-icon,
+.leaflet-marker-shadow {
+	display: block;
+	}
+/* .leaflet-container svg: reset svg max-width decleration shipped in Joomla! (joomla.org) 3.x */
+/* .leaflet-container img: map is broken in FF if you have max-width: 100% on tiles */
+.leaflet-container .leaflet-overlay-pane svg {
+	max-width: none !important;
+	max-height: none !important;
+	}
+.leaflet-container .leaflet-marker-pane img,
+.leaflet-container .leaflet-shadow-pane img,
+.leaflet-container .leaflet-tile-pane img,
+.leaflet-container img.leaflet-image-layer,
+.leaflet-container .leaflet-tile {
+	max-width: none !important;
+	max-height: none !important;
+	width: auto;
+	padding: 0;
+	}
+
+.leaflet-container img.leaflet-tile {
+	/* See: https://bugs.chromium.org/p/chromium/issues/detail?id=600120 */
+	mix-blend-mode: plus-lighter;
+}
+
+.leaflet-container.leaflet-touch-zoom {
+	-ms-touch-action: pan-x pan-y;
+	touch-action: pan-x pan-y;
+	}
+.leaflet-container.leaflet-touch-drag {
+	-ms-touch-action: pinch-zoom;
+	/* Fallback for FF which doesn't support pinch-zoom */
+	touch-action: none;
+	touch-action: pinch-zoom;
+}
+.leaflet-container.leaflet-touch-drag.leaflet-touch-zoom {
+	-ms-touch-action: none;
+	touch-action: none;
+}
+.leaflet-container {
+	-webkit-tap-highlight-color: transparent;
+}
+.leaflet-container a {
+	-webkit-tap-highlight-color: rgba(51, 181, 229, 0.4);
+}
+.leaflet-tile {
+	filter: inherit;
+	visibility: hidden;
+	}
+.leaflet-tile-loaded {
+	visibility: inherit;
+	}
+.leaflet-zoom-box {
+	width: 0;
+	height: 0;
+	-moz-box-sizing: border-box;
+	     box-sizing: border-box;
+	z-index: 800;
+	}
+/* workaround for https://bugzilla.mozilla.org/show_bug.cgi?id=888319 */
+.leaflet-overlay-pane svg {
+	-moz-user-select: none;
+	}
+
+.leaflet-pane         { z-index: 400; }
+
+.leaflet-tile-pane    { z-index: 200; }
+.leaflet-overlay-pane { z-index: 400; }
+.leaflet-shadow-pane  { z-index: 500; }
+.leaflet-marker-pane  { z-index: 600; }
+.leaflet-tooltip-pane   { z-index: 650; }
+.leaflet-popup-pane   { z-index: 700; }
+
+.leaflet-map-pane canvas { z-index: 100; }
+.leaflet-map-pane svg    { z-index: 200; }
+
+.leaflet-vml-shape {
+	width: 1px;
+	height: 1px;
+	}
+.lvml {
+	behavior: url(#default#VML);
+	display: inline-block;
+	position: absolute;
+	}
+
+
+/* control positioning */
+
+.leaflet-control {
+	position: relative;
+	z-index: 800;
+	pointer-events: visiblePainted; /* IE 9-10 doesn't have auto */
+	pointer-events: auto;
+	}
+.leaflet-top,
+.leaflet-bottom {
+	position: absolute;
+	z-index: 1000;
+	pointer-events: none;
+	}
+.leaflet-top {
+	top: 0;
+	}
+.leaflet-right {
+	right: 0;
+	}
+.leaflet-bottom {
+	bottom: 0;
+	}
+.leaflet-left {
+	left: 0;
+	}
+.leaflet-control {
+	float: left;
+	clear: both;
+	}
+.leaflet-right .leaflet-control {
+	float: right;
+	}
+.leaflet-top .leaflet-control {
+	margin-top: 10px;
+	}
+.leaflet-bottom .leaflet-control {
+	margin-bottom: 10px;
+	}
+.leaflet-left .leaflet-control {
+	margin-left: 10px;
+	}
+.leaflet-right .leaflet-control {
+	margin-right: 10px;
+	}
+
+
+/* zoom and fade animations */
+
+.leaflet-fade-anim .leaflet-popup {
+	opacity: 0;
+	-webkit-transition: opacity 0.2s linear;
+	   -moz-transition: opacity 0.2s linear;
+	        transition: opacity 0.2s linear;
+	}
+.leaflet-fade-anim .leaflet-map-pane .leaflet-popup {
+	opacity: 1;
+	}
+.leaflet-zoom-animated {
+	-webkit-transform-origin: 0 0;
+	    -ms-transform-origin: 0 0;
+	        transform-origin: 0 0;
+	}
+svg.leaflet-zoom-animated {
+	will-change: transform;
+}
+
+.leaflet-zoom-anim .leaflet-zoom-animated {
+	-webkit-transition: -webkit-transform 0.25s cubic-bezier(0,0,0.25,1);
+	   -moz-transition:    -moz-transform 0.25s cubic-bezier(0,0,0.25,1);
+	        transition:         transform 0.25s cubic-bezier(0,0,0.25,1);
+	}
+.leaflet-zoom-anim .leaflet-tile,
+.leaflet-pan-anim .leaflet-tile {
+	-webkit-transition: none;
+	   -moz-transition: none;
+	        transition: none;
+	}
+
+.leaflet-zoom-anim .leaflet-zoom-hide {
+	visibility: hidden;
+	}
+
+
+/* cursors */
+
+.leaflet-interactive {
+	cursor: pointer;
+	}
+.leaflet-grab {
+	cursor: -webkit-grab;
+	cursor:    -moz-grab;
+	cursor:         grab;
+	}
+.leaflet-crosshair,
+.leaflet-crosshair .leaflet-interactive {
+	cursor: crosshair;
+	}
+.leaflet-popup-pane,
+.leaflet-control {
+	cursor: auto;
+	}
+.leaflet-dragging .leaflet-grab,
+.leaflet-dragging .leaflet-grab .leaflet-interactive,
+.leaflet-dragging .leaflet-marker-draggable {
+	cursor: move;
+	cursor: -webkit-grabbing;
+	cursor:    -moz-grabbing;
+	cursor:         grabbing;
+	}
+
+/* marker & overlays interactivity */
+.leaflet-marker-icon,
+.leaflet-marker-shadow,
+.leaflet-image-layer,
+.leaflet-pane > svg path,
+.leaflet-tile-container {
+	pointer-events: none;
+	}
+
+.leaflet-marker-icon.leaflet-interactive,
+.leaflet-image-layer.leaflet-interactive,
+.leaflet-pane > svg path.leaflet-interactive,
+svg.leaflet-image-layer.leaflet-interactive path {
+	pointer-events: visiblePainted; /* IE 9-10 doesn't have auto */
+	pointer-events: auto;
+	}
+
+/* visual tweaks */
+
+.leaflet-container {
+	background: #ddd;
+	outline-offset: 1px;
+	}
+.leaflet-container a {
+	color: #0078A8;
+	}
+.leaflet-zoom-box {
+	border: 2px dotted #38f;
+	background: rgba(255,255,255,0.5);
+	}
+
+
+/* general typography */
+.leaflet-container {
+	font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
+	font-size: 12px;
+	font-size: 0.75rem;
+	line-height: 1.5;
+	}
+
+
+/* general toolbar styles */
+
+.leaflet-bar {
+	box-shadow: 0 1px 5px rgba(0,0,0,0.65);
+	border-radius: 4px;
+	}
+.leaflet-bar a {
+	background-color: #fff;
+	border-bottom: 1px solid #ccc;
+	width: 26px;
+	height: 26px;
+	line-height: 26px;
+	display: block;
+	text-align: center;
+	text-decoration: none;
+	color: black;
+	}
+.leaflet-bar a,
+.leaflet-control-layers-toggle {
+	background-position: 50% 50%;
+	background-repeat: no-repeat;
+	display: block;
+	}
+.leaflet-bar a:hover,
+.leaflet-bar a:focus {
+	background-color: #f4f4f4;
+	}
+.leaflet-bar a:first-child {
+	border-top-left-radius: 4px;
+	border-top-right-radius: 4px;
+	}
+.leaflet-bar a:last-child {
+	border-bottom-left-radius: 4px;
+	border-bottom-right-radius: 4px;
+	border-bottom: none;
+	}
+.leaflet-bar a.leaflet-disabled {
+	cursor: default;
+	background-color: #f4f4f4;
+	color: #bbb;
+	}
+
+.leaflet-touch .leaflet-bar a {
+	width: 30px;
+	height: 30px;
+	line-height: 30px;
+	}
+.leaflet-touch .leaflet-bar a:first-child {
+	border-top-left-radius: 2px;
+	border-top-right-radius: 2px;
+	}
+.leaflet-touch .leaflet-bar a:last-child {
+	border-bottom-left-radius: 2px;
+	border-bottom-right-radius: 2px;
+	}
+
+/* zoom control */
+
+.leaflet-control-zoom-in,
+.leaflet-control-zoom-out {
+	font: bold 18px 'Lucida Console', Monaco, monospace;
+	text-indent: 1px;
+	}
+
+.leaflet-touch .leaflet-control-zoom-in, .leaflet-touch .leaflet-control-zoom-out  {
+	font-size: 22px;
+	}
+
+
+/* layers control */
+
+.leaflet-control-layers {
+	box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+	background: #fff;
+	border-radius: 5px;
+	}
+.leaflet-control-layers-toggle {
+	background-image: url(images/layers.png);
+	width: 36px;
+	height: 36px;
+	}
+.leaflet-retina .leaflet-control-layers-toggle {
+	background-image: url(images/layers-2x.png);
+	background-size: 26px 26px;
+	}
+.leaflet-touch .leaflet-control-layers-toggle {
+	width: 44px;
+	height: 44px;
+	}
+.leaflet-control-layers .leaflet-control-layers-list,
+.leaflet-control-layers-expanded .leaflet-control-layers-toggle {
+	display: none;
+	}
+.leaflet-control-layers-expanded .leaflet-control-layers-list {
+	display: block;
+	position: relative;
+	}
+.leaflet-control-layers-expanded {
+	padding: 6px 10px 6px 6px;
+	color: #333;
+	background: #fff;
+	}
+.leaflet-control-layers-scrollbar {
+	overflow-y: scroll;
+	overflow-x: hidden;
+	padding-right: 5px;
+	}
+.leaflet-control-layers-selector {
+	margin-top: 2px;
+	position: relative;
+	top: 1px;
+	}
+.leaflet-control-layers label {
+	display: block;
+	font-size: 13px;
+	font-size: 1.08333em;
+	}
+.leaflet-control-layers-separator {
+	height: 0;
+	border-top: 1px solid #ddd;
+	margin: 5px -10px 5px -6px;
+	}
+
+/* Default icon URLs */
+.leaflet-default-icon-path { /* used only in path-guessing heuristic, see L.Icon.Default */
+	background-image: url(images/marker-icon.png);
+	}
+
+
+/* attribution and scale controls */
+
+.leaflet-container .leaflet-control-attribution {
+	background: #fff;
+	background: rgba(255, 255, 255, 0.8);
+	margin: 0;
+	}
+.leaflet-control-attribution,
+.leaflet-control-scale-line {
+	padding: 0 5px;
+	color: #333;
+	line-height: 1.4;
+	}
+.leaflet-control-attribution a {
+	text-decoration: none;
+	}
+.leaflet-control-attribution a:hover,
+.leaflet-control-attribution a:focus {
+	text-decoration: underline;
+	}
+.leaflet-attribution-flag {
+	display: inline !important;
+	vertical-align: baseline !important;
+	width: 1em;
+	height: 0.6669em;
+	}
+.leaflet-left .leaflet-control-scale {
+	margin-left: 5px;
+	}
+.leaflet-bottom .leaflet-control-scale {
+	margin-bottom: 5px;
+	}
+.leaflet-control-scale-line {
+	border: 2px solid #777;
+	border-top: none;
+	line-height: 1.1;
+	padding: 2px 5px 1px;
+	white-space: nowrap;
+	-moz-box-sizing: border-box;
+	     box-sizing: border-box;
+	background: rgba(255, 255, 255, 0.8);
+	text-shadow: 1px 1px #fff;
+	}
+.leaflet-control-scale-line:not(:first-child) {
+	border-top: 2px solid #777;
+	border-bottom: none;
+	margin-top: -2px;
+	}
+.leaflet-control-scale-line:not(:first-child):not(:last-child) {
+	border-bottom: 2px solid #777;
+	}
+
+.leaflet-touch .leaflet-control-attribution,
+.leaflet-touch .leaflet-control-layers,
+.leaflet-touch .leaflet-bar {
+	box-shadow: none;
+	}
+.leaflet-touch .leaflet-control-layers,
+.leaflet-touch .leaflet-bar {
+	border: 2px solid rgba(0,0,0,0.2);
+	background-clip: padding-box;
+	}
+
+
+/* popup */
+
+.leaflet-popup {
+	position: absolute;
+	text-align: center;
+	margin-bottom: 20px;
+	}
+.leaflet-popup-content-wrapper {
+	padding: 1px;
+	text-align: left;
+	border-radius: 12px;
+	}
+.leaflet-popup-content {
+	margin: 13px 24px 13px 20px;
+	line-height: 1.3;
+	font-size: 13px;
+	font-size: 1.08333em;
+	min-height: 1px;
+	}
+.leaflet-popup-content p {
+	margin: 17px 0;
+	margin: 1.3em 0;
+	}
+.leaflet-popup-tip-container {
+	width: 40px;
+	height: 20px;
+	position: absolute;
+	left: 50%;
+	margin-top: -1px;
+	margin-left: -20px;
+	overflow: hidden;
+	pointer-events: none;
+	}
+.leaflet-popup-tip {
+	width: 17px;
+	height: 17px;
+	padding: 1px;
+
+	margin: -10px auto 0;
+	pointer-events: auto;
+
+	-webkit-transform: rotate(45deg);
+	   -moz-transform: rotate(45deg);
+	    -ms-transform: rotate(45deg);
+	        transform: rotate(45deg);
+	}
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+	background: white;
+	color: #333;
+	box-shadow: 0 3px 14px rgba(0,0,0,0.4);
+	}
+.leaflet-container a.leaflet-popup-close-button {
+	position: absolute;
+	top: 0;
+	right: 0;
+	border: none;
+	text-align: center;
+	width: 24px;
+	height: 24px;
+	font: 16px/24px Tahoma, Verdana, sans-serif;
+	color: #757575;
+	text-decoration: none;
+	background: transparent;
+	}
+.leaflet-container a.leaflet-popup-close-button:hover,
+.leaflet-container a.leaflet-popup-close-button:focus {
+	color: #585858;
+	}
+.leaflet-popup-scrolled {
+	overflow: auto;
+	}
+
+.leaflet-oldie .leaflet-popup-content-wrapper {
+	-ms-zoom: 1;
+	}
+.leaflet-oldie .leaflet-popup-tip {
+	width: 24px;
+	margin: 0 auto;
+
+	-ms-filter: "progid:DXImageTransform.Microsoft.Matrix(M11=0.70710678, M12=0.70710678, M21=-0.70710678, M22=0.70710678)";
+	filter: progid:DXImageTransform.Microsoft.Matrix(M11=0.70710678, M12=0.70710678, M21=-0.70710678, M22=0.70710678);
+	}
+
+.leaflet-oldie .leaflet-control-zoom,
+.leaflet-oldie .leaflet-control-layers,
+.leaflet-oldie .leaflet-popup-content-wrapper,
+.leaflet-oldie .leaflet-popup-tip {
+	border: 1px solid #999;
+	}
+
+
+/* div icon */
+
+.leaflet-div-icon {
+	background: #fff;
+	border: 1px solid #666;
+	}
+
+
+/* Tooltip */
+/* Base styles for the element that has a tooltip */
+.leaflet-tooltip {
+	position: absolute;
+	padding: 6px;
+	background-color: #fff;
+	border: 1px solid #fff;
+	border-radius: 3px;
+	color: #222;
+	white-space: nowrap;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+	pointer-events: none;
+	box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+	}
+.leaflet-tooltip.leaflet-interactive {
+	cursor: pointer;
+	pointer-events: auto;
+	}
+.leaflet-tooltip-top:before,
+.leaflet-tooltip-bottom:before,
+.leaflet-tooltip-left:before,
+.leaflet-tooltip-right:before {
+	position: absolute;
+	pointer-events: none;
+	border: 6px solid transparent;
+	background: transparent;
+	content: "";
+	}
+
+/* Directions */
+
+.leaflet-tooltip-bottom {
+	margin-top: 6px;
+}
+.leaflet-tooltip-top {
+	margin-top: -6px;
+}
+.leaflet-tooltip-bottom:before,
+.leaflet-tooltip-top:before {
+	left: 50%;
+	margin-left: -6px;
+	}
+.leaflet-tooltip-top:before {
+	bottom: 0;
+	margin-bottom: -12px;
+	border-top-color: #fff;
+	}
+.leaflet-tooltip-bottom:before {
+	top: 0;
+	margin-top: -12px;
+	margin-left: -6px;
+	border-bottom-color: #fff;
+	}
+.leaflet-tooltip-left {
+	margin-left: -6px;
+}
+.leaflet-tooltip-right {
+	margin-left: 6px;
+}
+.leaflet-tooltip-left:before,
+.leaflet-tooltip-right:before {
+	top: 50%;
+	margin-top: -6px;
+	}
+.leaflet-tooltip-left:before {
+	right: 0;
+	margin-right: -12px;
+	border-left-color: #fff;
+	}
+.leaflet-tooltip-right:before {
+	left: 0;
+	margin-left: -12px;
+	border-right-color: #fff;
+	}
+
+/* Printing */
+
+@media print {
+	/* Prevent printers from removing background-images of controls. */
+	.leaflet-control {
+		-webkit-print-color-adjust: exact;
+		print-color-adjust: exact;
+		}
+	}
+</style>
+<style>
+/* Layout: full-screen map; floating top bar; bottom dock = size switch + zone carousel + actions. */
+:root{
+  --bg:#eef0ee; --panel:#ffffff; --panel2:#f5f6f4; --ink:#14171b; --mute:#626a72; --line:#dde1dd;
+  --go:#0d7a49; --go-soft:#e1f2e9; --stop:#b3261e; --warn:#9a5a00; --route:#1d5fd6; --me:#1d5fd6;
+  --shadow:0 6px 24px rgba(20,23,27,.14); --water:#cfdde6; --land:#f4f5f1; --park:#dfe9d8; --road:#e3c38a;
+  --display:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101317; --panel:#1b1f25; --panel2:#232830; --ink:#eef0f2; --mute:#9aa2ab; --line:#2d323a;
+  --go:#4fd494; --go-soft:#173323; --stop:#ff7b72; --warn:#f2b24c; --route:#6ea0ff; --me:#6ea0ff;
+  --shadow:0 6px 24px rgba(0,0,0,.45); --water:#0b1620; --land:#1a1e23; --park:#1b2a20; --road:#5a4a2c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#101317; --panel:#1b1f25; --panel2:#232830; --ink:#eef0f2; --mute:#9aa2ab; --line:#2d323a;
+  --go:#4fd494; --go-soft:#173323; --stop:#ff7b72; --warn:#f2b24c; --route:#6ea0ff; --me:#6ea0ff;
+  --shadow:0 6px 24px rgba(0,0,0,.45); --water:#0b1620; --land:#1a1e23; --park:#1b2a20; --road:#5a4a2c; color-scheme:dark}
+[hidden]{display:none!important}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font:15px/1.35 var(--body);overflow:hidden}
+.num{font-variant-numeric:tabular-nums}
+button,input{font:inherit;color:var(--ink)}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--route);outline-offset:2px}
+
+#map{position:fixed;inset:0;background:var(--water)}
+.leaflet-container{background:var(--water);font:inherit}
+.zl{transform:translate(-50%,-50%);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--mute);white-space:nowrap;pointer-events:none;font-weight:600}
+.leaflet-control-attribution{background:color-mix(in srgb,var(--panel) 80%,transparent)!important;color:var(--mute)!important;font-size:10px}
+.leaflet-control-attribution a{color:var(--mute)!important}
+
+/* Top bar */
+.top{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:12px;right:12px;display:flex;gap:8px;align-items:stretch;z-index:500}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+.here{flex:1;min-width:0;padding:8px 12px;display:grid;gap:1px}
+.here .z{font-family:var(--display);font-size:18px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.here .s{font-size:12px;color:var(--mute);display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--mute);flex:none}
+.dot.live{background:var(--go);box-shadow:0 0 0 3px var(--go-soft)}
+.dot.off{background:var(--warn)}
+.meta{display:grid;place-items:center;padding:6px 10px;text-align:center;gap:0}
+.meta label{font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.8px}
+.meta .v{display:flex;align-items:baseline;font-family:var(--display);font-weight:700;font-size:20px;color:var(--go)}
+.meta input{width:2.4em;border:0;border-bottom:1.5px dashed var(--go);background:transparent;color:var(--go);font:inherit;text-align:center;padding:0}
+.meta small{font-size:12px;color:var(--mute);font-family:var(--body);font-weight:500}
+.iconbtn{width:46px;display:grid;place-items:center;border-radius:14px}
+.iconbtn svg{width:20px;height:20px;stroke:var(--ink);fill:none;stroke-width:1.8}
+
+.shift{position:fixed;top:calc(env(safe-area-inset-top,0px) + 74px);left:12px;display:flex;gap:12px;padding:6px 12px;font-size:13px;z-index:500;border-radius:999px}
+.shift b{font-weight:600}
+.shift span{color:var(--mute)}
+
+/* Map pins */
+.pin{transform:translate(-50%,-100%);display:inline-flex;flex-direction:column;align-items:center;pointer-events:auto}
+.pin .tag{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:3px 9px;font-family:var(--display);font-weight:700;font-size:15px;box-shadow:var(--shadow);white-space:nowrap}
+.pin .tag small{font-family:var(--body);font-weight:500;font-size:11px;color:var(--mute);margin-left:4px}
+.pin .stem{width:2px;height:7px;background:var(--line)}
+.pin.sel .tag{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.pin.sel .tag small{color:var(--panel)}
+.pin.best .tag{border-color:var(--go)}
+.me{width:16px;height:16px;border-radius:50%;background:var(--me);border:3px solid var(--panel);box-shadow:0 0 0 6px color-mix(in srgb,var(--me) 25%,transparent)}
+
+/* Bottom dock */
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:500;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 10px);display:grid;gap:8px;pointer-events:none}
+.dock>*{pointer-events:auto}
+.seg{justify-self:center;display:flex;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px;box-shadow:var(--shadow)}
+.seg button{border:0;background:transparent;border-radius:999px;padding:6px 14px;font-size:13px;font-weight:600;color:var(--mute)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--panel)}
+.carousel{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;padding-inline:16px;padding-block:4px 6px;scrollbar-width:none}
+.carousel::-webkit-scrollbar{display:none}
+.zc{flex:0 0 min(78vw,300px);scroll-snap-align:center;padding:12px 14px;display:grid;gap:8px;text-align:left;border:1px solid var(--line);background:var(--panel);border-radius:16px;box-shadow:var(--shadow)}
+.zc[aria-current="true"]{border-color:var(--ink);border-width:1.5px}
+.zc .h{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.zc .n{font-family:var(--display);font-weight:700;font-size:17px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.zc .eta{font-size:13px;color:var(--mute);white-space:nowrap}
+.cuts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.cut{background:var(--panel2);border-radius:10px;padding:6px 8px;display:grid;gap:0}
+.cut.on{background:var(--go-soft)}
+.cut .k{font-size:11px;color:var(--mute)}
+.cut .v{font-family:var(--display);font-weight:700;font-size:20px}
+.cut.on .v{color:var(--go)}
+.cut .t{font-size:11px;color:var(--mute)}
+.zc .f{font-size:12px;color:var(--mute);display:flex;justify-content:space-between;gap:8px}
+.zc .f .tipw{color:var(--warn)}
+.actions{display:flex;gap:8px;padding-inline:16px}
+.actions button{flex:1;padding:13px 8px;border-radius:14px;border:1px solid var(--line);background:var(--panel);font-weight:600;box-shadow:var(--shadow)}
+.actions .primary{background:var(--go);border-color:var(--go);color:var(--bg)}
+.actions button:disabled{opacity:.45;cursor:default}
+
+/* Sheets */
+.scrim{position:fixed;inset:0;background:rgba(10,12,15,.45);z-index:900}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:901;background:var(--panel);border-radius:20px 20px 0 0;padding:18px 16px calc(env(safe-area-inset-bottom,0px) + 16px);display:grid;gap:14px;max-height:85%;overflow-y:auto;max-width:560px;margin-inline:auto}
+.sheet h2{font-family:var(--display);font-size:22px;margin:0}
+.field{display:grid;gap:6px}
+.field>span{font-size:13px;color:var(--mute)}
+.field input[type=number]{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:22px;font-family:var(--display);font-weight:700;width:100%}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{border:1px solid var(--line);background:var(--panel2);border-radius:999px;padding:8px 12px;font-size:14px}
+.chips button[aria-pressed="true"]{background:var(--go-soft);border-color:var(--go);color:var(--go);font-weight:600}
+.row{display:flex;gap:8px}
+.row>*{flex:1;min-width:0}
+.btn{padding:13px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);font-weight:600}
+.btn.primary{background:var(--go);border-color:var(--go);color:var(--bg)}
+.btn.danger{color:var(--stop)}
+.note{font-size:13px;color:var(--mute);margin:0}
+.loglist{display:grid;gap:6px}
+.li{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px;border:1px solid var(--line);border-radius:12px}
+.li .l{min-width:0}
+.li small{display:block;color:var(--mute);font-size:12px}
+.li input{width:88px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+.ok{color:var(--go)} .bad{color:var(--stop)}
+.toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 120px);transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:8px 14px;border-radius:999px;font-size:13px;z-index:950}
+</style>
+
+</head>
+<body>
+<div id="map" aria-label="Mapa de zonas"></div>
+
+<div class="top">
+  <div class="card here">
+    <span class="z" id="zoneName">—</span>
+    <span class="s"><span class="dot" id="gpsDot"></span><span id="gpsTxt">Buscando GPS…</span></span>
+  </div>
+  <div class="card meta">
+    <label for="metaInput">Meta</label>
+    <div class="v">$<input id="metaInput" class="num" type="number" inputmode="decimal" min="1" step="1"><small>/h</small></div>
+  </div>
+  <button class="card iconbtn" id="openMenu" aria-label="Turno e ajustes"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+</div>
+
+<div class="card shift" id="shiftBar" hidden>
+  <span>Turno</span><b class="num" id="sEarn">$0</b><b class="num" id="sHrs">0:00</b><b class="num ok" id="sRate">—</b>
+</div>
+
+<div class="dock">
+  <div class="seg" role="group" aria-label="Tamanho do pedido nos pinos">
+    <button data-size="S" aria-pressed="true">Até 20 itens</button>
+    <button data-size="M" aria-pressed="false">21–40</button>
+    <button data-size="L" aria-pressed="false">40+</button>
+  </div>
+  <div class="carousel" id="carousel" aria-label="Zonas e valores de corte"></div>
+  <div class="actions">
+    <button id="bShift">Iniciar turno</button>
+    <button class="primary" id="bAccept">Aceitei</button>
+    <button id="bDone" disabled>Entreguei</button>
+  </div>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+
+<div class="sheet" id="acceptSheet" hidden role="dialog" aria-labelledby="accH">
+  <h2 id="accH">Batch aceito</h2>
+  <label class="field" for="aTotal"><span>Total da oferta (batch + gorjeta)</span>
+    <input id="aTotal" type="number" inputmode="decimal" step="0.01" placeholder="0.00"></label>
+  <div class="field"><span>Tamanho</span><div class="chips" id="aSize"></div></div>
+  <div class="field"><span>Entrega em</span><div class="chips" id="aDest"></div></div>
+  <div class="row"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="aSave">Salvar</button></div>
+</div>
+
+<div class="sheet" id="menuSheet" hidden role="dialog" aria-labelledby="menuH">
+  <h2 id="menuH">Turno e ajustes</h2>
+  <div class="field"><span>Batches recentes · preencha o valor recebido quando cair</span><div class="loglist" id="log"></div></div>
+  <div class="row">
+    <label class="field" for="cfgSec"><span>Segundos por item</span><input id="cfgSec" type="number" inputmode="numeric"></label>
+    <label class="field" for="cfgCheck"><span>Checkout (min)</span><input id="cfgCheck" type="number" inputmode="numeric"></label>
+  </div>
+  <label class="field" for="cfgMile"><span>Custo por milha ($): gasolina + desgaste</span><input id="cfgMile" type="number" inputmode="decimal" step="0.01"></label>
+  <label class="chips" for="cfgManual"><span class="note"><input id="cfgManual" type="checkbox"> Escolher minha zona manualmente (sem GPS)</span></label>
+  <div class="chips" id="manualZones" hidden></div>
+  <p class="note">Corte = (meta × tempo total ÷ 60) + milhas × custo. Tempo total = compra (itens × segundos + checkout) + direção até a entrega + 4 min de entrega + volta e espera no melhor ponto. Colunas usam 15, 30 e 50 itens.</p>
+  <button class="btn danger" id="wipe">Apagar histórico deste aparelho</button>
+  <div class="row" id="wipeConfirm" hidden><button class="btn" id="wipeNo">Manter</button><button class="btn danger" id="wipeYes">Apagar tudo</button></div>
+  <button class="btn" data-close>Fechar</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+// ---------- Zones ----------
+const ZONES=[
+ {id:"daly",  n:"Daly City / Westlake", lat:37.6879,lng:-122.4702,w:14},
+ {id:"serra", n:"Serramonte / Colma",   lat:37.6720,lng:-122.4650,w:15},
+ {id:"ssf",   n:"South San Francisco",  lat:37.6547,lng:-122.4077,w:16},
+ {id:"exc",   n:"Excelsior / Ingleside",lat:37.7230,lng:-122.4340,w:13},
+ {id:"sunset",n:"Sunset",               lat:37.7535,lng:-122.4890,w:11},
+ {id:"rich",  n:"Richmond",             lat:37.7800,lng:-122.4830,w:11},
+ {id:"noe",   n:"Noe / Castro",         lat:37.7500,lng:-122.4380,w:9},
+ {id:"mission",n:"Mission / Bernal",    lat:37.7520,lng:-122.4150,w:9},
+ {id:"marina",n:"Marina / Pac Heights", lat:37.7980,lng:-122.4370,w:6},
+ {id:"wharf", n:"North Beach / Píer",   lat:37.8060,lng:-122.4150,w:6},
+ {id:"soma",  n:"SoMa / Downtown",      lat:37.7850,lng:-122.4050,w:6},
+ {id:"dogp",  n:"Dogpatch / Potrero",   lat:37.7600,lng:-122.3950,w:10},
+];
+const SIZES=[{id:"S",n:"Até 20",items:15},{id:"M",n:"21–40",items:30},{id:"L",n:"40+",items:50}];
+
+// ---------- Storage ----------
+const KEY="corteAoVivo.v1";
+const DEF={cfg:{target:30,mile:0.35,secItem:112,checkout:6,manual:false,zone:"daly",metaSet:true},batches:[],waits:[],shift:null,lastDone:null};
+function load(){try{const r=JSON.parse(localStorage.getItem(KEY));if(r&&r.cfg){const o=Object.assign(structuredClone(DEF),r);o.cfg=Object.assign(structuredClone(DEF.cfg),r.cfg);return o}}catch(e){}return structuredClone(DEF)}
+let S=load();
+if(!S.cfg.metaSet){if(S.cfg.target===25)S.cfg.target=30;S.cfg.metaSet=true}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+
+// ---------- Math ----------
+const rad=x=>x*Math.PI/180;
+function crow(a,b){const dLa=rad(b.lat-a.lat),dLo=rad(b.lng-a.lng);const h=Math.sin(dLa/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dLo/2)**2;return 2*3958.8*Math.asin(Math.sqrt(h))}
+const roadMi=(a,b)=>crow(a,b)*1.35;
+function isPeak(d=new Date()){const h=d.getHours()+d.getMinutes()/60,wd=d.getDay()>0&&d.getDay()<6;return wd&&((h>=7&&h<9.5)||(h>=16&&h<19))}
+const traffic=()=>isPeak()?1.3:1;
+function estMin(a,b){const m=roadMi(a,b);const mph=m<3?14:m<6?20:28;return m/mph*60*traffic()+3}
+function nearest(p){let best=ZONES[0],bd=1e9;for(const z of ZONES){const d=crow(p,z);if(d<bd){bd=d;best=z}}return {z:best,d:bd}}
+const bucket=t=>{const h=new Date(t).getHours();return h<11?0:h<16?1:2};
+function waitFor(id){let xs=S.waits.filter(w=>w.z===id&&w.b===bucket(Date.now())).map(w=>w.m);
+ if(xs.length<3)xs=S.waits.filter(w=>w.z===id).map(w=>w.m);
+ if(xs.length<3)return {m:ZONES.find(z=>z.id===id).w,learned:false};
+ xs.sort((a,b)=>a-b);return {m:xs[xs.length>>1],learned:true}}
+function tipFactor(id){const xs=S.batches.filter(b=>b.dest===id&&b.paid!=null&&b.total>0);if(xs.length<3)return 1;
+ const r=xs.reduce((s,b)=>s+b.paid/b.total,0)/xs.length;return r<0.97?1/r:1}
+function bestReturn(d){let best=null;for(const z of ZONES){const t=(z.id===d.id?0:estMin(d,z))+waitFor(z.id).m;if(!best||t<best.t)best={z,t,mi:z.id===d.id?0:roadMi(d,z)}}return best}
+const routeCache={}; // dest id -> {min, mi, geo} from real routing when available
+function legTo(dest){const r=routeCache[dest.id];if(r&&r.from===origin().key)return {min:r.min*traffic(),mi:r.mi,real:true};return {min:estMin(origin(),dest),mi:roadMi(origin(),dest),real:false}}
+function cutoff(dest,size){
+ const items=SIZES.find(s=>s.id===size).items;
+ const shop=items*S.cfg.secItem/60+S.cfg.checkout;
+ const leg=legTo(dest),back=bestReturn(dest),tf=tipFactor(dest.id);
+ const min=shop+leg.min+4+back.t, mi=leg.mi+back.mi;
+ return {need:Math.ceil((S.cfg.target*min/60+mi*S.cfg.mile)*tf),min:Math.round(min),leg,back,tf}}
+
+// ---------- State ----------
+let gps="wait",fix=null,size="S",sel=null;
+let here=ZONES.find(z=>z.id===S.cfg.zone)||ZONES[0];
+function origin(){return fix?{lat:fix.lat,lng:fix.lng,key:fix.key}:{lat:here.lat,lng:here.lng,key:here.id}}
+
+// ---------- Map ----------
+const $=id=>document.getElementById(id);
+const dark=()=>{const t=document.documentElement.dataset.theme;return t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches};
+const map=L.map("map",{zoomControl:false,attributionControl:true}).fitBounds([[37.66,-122.51],[37.81,-122.38]],{paddingTopLeft:[10,90],paddingBottomRight:[10,260]});
+let tiles=null;
+function setTiles(){if(tiles)map.removeLayer(tiles);
+ tiles=L.tileLayer(`https://{s}.basemaps.cartocdn.com/${dark()?"dark_all":"light_all"}/{z}/{x}/{y}{r}.png`,{subdomains:"abcd",maxZoom:19,attribution:'© OpenStreetMap · © CARTO'}).addTo(map)}
+setTiles();matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{setTiles();setTimeout(()=>{drawBase();drawAreas();render()},50)});
+new MutationObserver(setTiles).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+
+// built-in basemap (simplified coastline, park, freeways) so the map reads even when tiles can't load
+const COAST=[[37.630,-122.497],[37.670,-122.497],[37.700,-122.503],[37.735,-122.507],[37.765,-122.511],[37.780,-122.513],[37.788,-122.506],[37.789,-122.491],[37.810,-122.477],[37.807,-122.465],[37.805,-122.445],[37.808,-122.425],[37.811,-122.410],[37.806,-122.398],[37.795,-122.393],[37.785,-122.387],[37.770,-122.387],[37.755,-122.385],[37.740,-122.375],[37.728,-122.368],[37.715,-122.380],[37.708,-122.393],[37.700,-122.390],[37.680,-122.385],[37.660,-122.378],[37.640,-122.390],[37.625,-122.405],[37.600,-122.410],[37.600,-122.497]];
+const ROADS={"280":[[37.640,-122.468],[37.690,-122.468],[37.708,-122.460],[37.725,-122.445],[37.735,-122.430],[37.745,-122.405],[37.765,-122.398],[37.776,-122.397]],
+ "101":[[37.640,-122.405],[37.660,-122.405],[37.700,-122.398],[37.730,-122.400],[37.750,-122.405],[37.766,-122.408],[37.772,-122.420],[37.790,-122.423],[37.800,-122.440],[37.803,-122.460],[37.810,-122.475]],
+ "19th Ave":[[37.700,-122.474],[37.720,-122.475],[37.765,-122.476],[37.789,-122.475]]};
+const baseLayer=L.layerGroup().addTo(map);
+function drawBase(){baseLayer.clearLayers();
+ L.polygon(COAST,{stroke:false,fillColor:css("--land"),fillOpacity:1,interactive:false}).addTo(baseLayer);
+ L.rectangle([[37.7652,-122.5105],[37.7715,-122.4540]],{stroke:false,fillColor:css("--park"),fillOpacity:1,interactive:false}).addTo(baseLayer);
+ L.circle([37.7235,-122.4935],{radius:700,stroke:false,fillColor:css("--water"),fillOpacity:1,interactive:false}).addTo(baseLayer);
+ Object.values(ROADS).forEach(r=>L.polyline(r,{color:css("--road"),weight:3,opacity:.9,interactive:false}).addTo(baseLayer));
+ ZONES.forEach(z=>L.marker([z.lat-0.0045,z.lng],{icon:L.divIcon({className:"",html:`<div class="zl">${z.n.split(" /")[0]}</div>`,iconSize:[0,0]}),interactive:false}).addTo(baseLayer))}
+drawBase();
+const areaLayer=L.layerGroup().addTo(map),pinLayer=L.layerGroup().addTo(map);
+let routeLine=null,meMarker=null;
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+function drawAreas(){areaLayer.clearLayers();ZONES.forEach(z=>L.circle([z.lat,z.lng],{radius:1100,color:css("--mute"),weight:1,opacity:.35,fillColor:css("--mute"),fillOpacity:.06,interactive:false}).addTo(areaLayer))}
+drawAreas();
+const money=v=>"$"+Math.round(v);
+
+function render(){
+ $("metaInput").matches(":focus")||($("metaInput").value=S.cfg.target);
+ $("zoneName").textContent=here.n;
+ $("gpsDot").className="dot "+(gps==="live"?"live":gps==="wait"?"":"off");
+ const w=waitFor(here.id);
+ $("gpsTxt").textContent=({live:"GPS ao vivo",wait:"Buscando GPS…",manual:"Zona manual",denied:"GPS indisponível · zona manual",far:"Fora da área · zona manual"}[gps])+` · espera ~${Math.round(w.m)} min`+(isPeak()?" · pico":"");
+ const rows=ZONES.map(z=>({z,c:Object.fromEntries(SIZES.map(s=>[s.id,cutoff(z,s.id)])),d:crow(origin(),z)})).sort((a,b)=>a.d-b.d);
+ // best = lowest required $ per minute of work for the chosen size
+ const best=rows.reduce((b,r)=>!b||r.c[size].need/r.c[size].min<b.c[size].need/b.c[size].min?r:b,null);
+ // pins
+ pinLayer.clearLayers();
+ rows.forEach(r=>{const cls=["pin",r.z.id===sel?"sel":"",r===best?"best":""].join(" ");
+  const m=L.marker([r.z.lat,r.z.lng],{icon:L.divIcon({className:"",html:`<div class="${cls}"><span class="tag">${money(r.c[size].need)}<small>${r.c[size].min}m</small></span><span class="stem"></span></div>`,iconSize:[0,0]}),keyboard:true,title:r.z.n});
+  m.on("click",()=>select(r.z.id,true));m.addTo(pinLayer)});
+ // me
+ const o=origin();if(!meMarker)meMarker=L.marker([o.lat,o.lng],{icon:L.divIcon({className:"",html:'<div class="me"></div>',iconSize:[16,16],iconAnchor:[8,8]}),interactive:false,zIndexOffset:1000}).addTo(map);else meMarker.setLatLng([o.lat,o.lng]);
+ // carousel
+ const car=$("carousel"),sx=car.scrollLeft;
+ car.innerHTML=rows.map(r=>{const c=r.c,leg=c.S.leg,bk=c.S.back;
+  return `<button class="zc" data-z="${r.z.id}" aria-current="${r.z.id===sel}">
+   <span class="h"><span class="n">${r.z.n}</span><span class="eta num">${Math.round(leg.min)} min · ${leg.mi.toFixed(1)} mi${leg.real?"":" ≈"}</span></span>
+   <span class="cuts">${SIZES.map(s=>`<span class="cut ${s.id===size?"on":""}"><span class="k">${s.n}</span><span class="v num">${money(c[s.id].need)}</span><span class="t num">${c[s.id].min} min</span></span>`).join("")}</span>
+   <span class="f"><span>Depois: ${bk.z.id===r.z.id?"espere lá mesmo":"espere em "+bk.z.n.split(" /")[0]} (~${Math.round(waitFor(bk.z.id).m)} min)</span>${c.S.tf>1?'<span class="tipw">gorjeta costuma cair</span>':""}</span>
+  </button>`}).join("");
+ car.scrollLeft=sx;
+ renderShift();
+}
+function renderShift(){const sh=S.shift;$("shiftBar").hidden=!sh;$("bShift").textContent=sh?"Encerrar":"Iniciar turno";
+ $("bDone").disabled=!S.batches.some(b=>sh&&b.shift===sh.id&&!b.done);
+ if(!sh)return;const list=S.batches.filter(b=>b.shift===sh.id);const earn=list.reduce((s,b)=>s+(b.paid??b.total),0);const mins=(Date.now()-sh.start)/60000;
+ $("sEarn").textContent=money(earn);$("sHrs").textContent=`${Math.floor(mins/60)}:${String(Math.floor(mins%60)).padStart(2,"0")}`;
+ $("sRate").textContent=mins>15?money(earn/(mins/60))+"/h":"—"}
+
+// ---------- Selection + route ----------
+async function select(id,fromMap){sel=id;const z=ZONES.find(z=>z.id===id);render();
+ const card=document.querySelector(`.zc[data-z="${id}"]`);if(card&&fromMap)card.scrollIntoView({behavior:"smooth",inline:"center",block:"nearest"});
+ const o=origin();if(routeLine)map.removeLayer(routeLine);
+ routeLine=L.polyline([[o.lat,o.lng],[z.lat,z.lng]],{color:css("--route"),weight:4,opacity:.7,dashArray:"6 8"}).addTo(map);
+ map.fitBounds(routeLine.getBounds(),{paddingTopLeft:[30,110],paddingBottomRight:[30,300],maxZoom:14});
+ try{const ctl=new AbortController();setTimeout(()=>ctl.abort(),6000);
+  const r=await fetch(`https://router.project-osrm.org/route/v1/driving/${o.lng},${o.lat};${z.lng},${z.lat}?overview=full&geometries=geojson`,{signal:ctl.signal});
+  const j=await r.json();const rt=j.routes&&j.routes[0];if(!rt||sel!==id)return;
+  routeCache[id]={from:o.key,min:rt.duration/60*1.15+3,mi:rt.distance/1609.34};
+  if(routeLine)map.removeLayer(routeLine);
+  routeLine=L.geoJSON(rt.geometry,{style:{color:css("--route"),weight:5,opacity:.9}}).addTo(map);render()}
+ catch(e){/* offline or blocked: keep the straight-line estimate */}}
+$("carousel").addEventListener("click",e=>{const c=e.target.closest(".zc");if(c)select(c.dataset.z,false)});
+document.querySelector(".seg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;size=b.dataset.size;
+ document.querySelectorAll(".seg button").forEach(x=>x.setAttribute("aria-pressed",x===b));render()});
+
+// ---------- GPS ----------
+function startGPS(){
+ if(S.cfg.manual||!navigator.geolocation){gps="manual";render();return}
+ try{navigator.geolocation.watchPosition(p=>{const pt={lat:p.coords.latitude,lng:p.coords.longitude};const n=nearest(pt);
+   if(n.d>8){gps="far";fix=null}else{gps="live";const moved=!fix||crow(fix,pt)>0.15;
+    if(moved){fix={...pt,key:pt.lat.toFixed(3)+","+pt.lng.toFixed(3)}}here=n.z}
+   render()},()=>{gps="denied";render()},{enableHighAccuracy:true,maximumAge:15000,timeout:20000})}catch(e){gps="denied";render()}}
+
+// ---------- Sheets ----------
+function openSheet(id){$("scrim").hidden=false;$(id).hidden=false}
+function closeSheets(){$("scrim").hidden=true;["acceptSheet","menuSheet"].forEach(i=>$(i).hidden=true);$("wipeConfirm").hidden=true}
+$("scrim").onclick=closeSheets;document.querySelectorAll("[data-close]").forEach(b=>b.onclick=closeSheets);
+function toast(t){const d=document.createElement("div");d.className="toast";d.textContent=t;document.body.append(d);setTimeout(()=>d.remove(),1800)}
+
+let pick={size:"S",dest:null};
+function chips(){ $("aSize").innerHTML=SIZES.map(s=>`<button type="button" data-k="size" data-v="${s.id}" aria-pressed="${pick.size===s.id}">${s.n}</button>`).join("");
+ $("aDest").innerHTML=ZONES.map(z=>`<button type="button" data-k="dest" data-v="${z.id}" aria-pressed="${pick.dest===z.id}">${z.n.split(" /")[0]}</button>`).join("")}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-k]");if(!b)return;pick[b.dataset.k]=b.dataset.v;chips()});
+$("bAccept").onclick=()=>{
+ if(S.lastDone&&Date.now()-S.lastDone.at<90*60000){S.waits.push({z:S.lastDone.z,b:bucket(S.lastDone.at),m:(Date.now()-S.lastDone.at)/60000});S.lastDone=null}
+ if(!S.shift)S.shift={id:Date.now(),start:Date.now()};save();
+ pick={size,dest:sel};chips();$("aTotal").value="";openSheet("acceptSheet");setTimeout(()=>$("aTotal").focus(),50);render()};
+$("aSave").onclick=()=>{const v=parseFloat($("aTotal").value);if(!(v>0)){$("aTotal").focus();return}
+ S.batches.push({id:Date.now(),at:Date.now(),shift:S.shift.id,total:v,size:pick.size,dest:pick.dest||here.id,from:here.id,done:false,paid:null});
+ save();closeSheets();toast("Batch salvo");render()};
+$("bDone").onclick=()=>{S.batches.filter(b=>b.shift===S.shift?.id&&!b.done).forEach(b=>b.done=true);S.lastDone={z:here.id,at:Date.now()};save();toast("Entrega registrada");render()};
+$("bShift").onclick=()=>{S.shift=S.shift?null:{id:Date.now(),start:Date.now()};S.lastDone=null;save();toast(S.shift?"Turno iniciado":"Turno encerrado");render()};
+$("openMenu").onclick=()=>{renderLog();openSheet("menuSheet")};
+function renderLog(){const rec=S.batches.slice(-12).reverse();
+ $("log").innerHTML=rec.length?rec.map(b=>{const z=ZONES.find(z=>z.id===b.dest);const t=new Date(b.at).toLocaleString("pt-BR",{weekday:"short",hour:"2-digit",minute:"2-digit"});
+  const paid=b.paid!=null?`<b class="num ${b.paid>=b.total?"ok":"bad"}">${money(b.paid)}</b>`:`<input type="number" inputmode="decimal" step="0.01" placeholder="recebido" aria-label="Valor recebido" data-paid="${b.id}">`;
+  return `<div class="li"><div class="l"><b class="num">${money(b.total)}</b> · ${SIZES.find(s=>s.id===b.size).n} · ${z?z.n.split(" /")[0]:"?"}<small>${t}${b.done?" · entregue":" · em andamento"}</small></div>${paid}</div>`}).join("")
+ :'<p class="note">Nada ainda. Toque em "Aceitei" logo após aceitar uma oferta e em "Entreguei" ao terminar; o tempo até a próxima oferta vira sua espera real por zona.</p>'}
+$("log").addEventListener("change",e=>{const id=+e.target.dataset.paid;const b=S.batches.find(b=>b.id===id);const v=parseFloat(e.target.value);if(b&&v>=0){b.paid=v;save();renderLog();render()}});
+
+// settings
+$("metaInput").oninput=e=>{const v=parseFloat(e.target.value);if(v>0){S.cfg.target=v;save();render()}};
+[["cfgSec","secItem"],["cfgCheck","checkout"],["cfgMile","mile"]].forEach(([id,k])=>{$(id).value=S.cfg[k];$(id).onchange=e=>{const v=parseFloat(e.target.value);if(v>=0){S.cfg[k]=v;save();render()}}});
+function manualChips(){$("manualZones").hidden=!S.cfg.manual;$("manualZones").innerHTML=ZONES.map(z=>`<button type="button" data-mz="${z.id}" aria-pressed="${here.id===z.id}">${z.n.split(" /")[0]}</button>`).join("")}
+$("manualZones").addEventListener("click",e=>{const b=e.target.closest("[data-mz]");if(!b)return;here=ZONES.find(z=>z.id===b.dataset.mz);S.cfg.zone=here.id;fix=null;save();manualChips();render()});
+$("cfgManual").checked=S.cfg.manual;manualChips();
+$("cfgManual").onchange=e=>{S.cfg.manual=e.target.checked;save();manualChips();if(S.cfg.manual){gps="manual";fix=null;render()}else{gps="wait";startGPS()}};
+$("wipe").onclick=()=>{$("wipeConfirm").hidden=false};$("wipeNo").onclick=()=>{$("wipeConfirm").hidden=true};
+$("wipeYes").onclick=()=>{const cfg=S.cfg;S=structuredClone(DEF);S.cfg=cfg;save();renderLog();render();$("wipeConfirm").hidden=true;toast("Histórico apagado")};
+
+async function wake(){try{await navigator.wakeLock?.request("screen")}catch(e){}}
+document.addEventListener("visibilitychange",()=>{if(!document.hidden){wake();render()}});
+save();wake();startGPS();render();setInterval(render,30000);
+</script>
+
+</body>
+</html>
